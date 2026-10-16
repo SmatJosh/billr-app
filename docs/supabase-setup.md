@@ -21,7 +21,7 @@ These tables have row-level security switched on. Each signed-in person can only
 
 Billr signs people in with a 6-digit code sent by email, which they type into the app. Supabase's default emails send a link instead, so change two templates:
 
-1. Open **Authentication**, then **Emails** (under Configuration), then the **Templates** tab.
+1. Open **Authentication**, then **Emails** (under Notifications in the left menu). Use the **Templates** tab if one shows.
 2. Open **Magic link**. Set the subject to `Your Billr code` and replace the body with:
 
    ```html
