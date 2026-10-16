@@ -19,10 +19,16 @@ These tables have row-level security switched on. Each signed-in person can only
 
 ## 3. Make the sign-in email send a code
 
-Billr signs people in with a 6-digit code sent by email, which they type into the app. Supabase's default emails send a link instead, so change two templates:
+Billr signs people in with a 6-digit code sent by email, which they type into the app. Supabase's default email sends a link instead, and its templates can only be edited once you connect your own email service (SMTP). That service is also what lets people outside your Supabase team get codes. Brevo is free (300 emails a day) and needs no domain:
+
+1. Sign up at [brevo.com](https://www.brevo.com). Under **Senders, Domains & Dedicated IPs > Senders**, add your email address and confirm it with the code Brevo sends.
+2. Under **SMTP & API > SMTP**, click **Generate a new SMTP key**. Keep the page open.
+3. In Supabase, open **Authentication > Emails** and click **Set up SMTP**. Switch custom SMTP on and fill in: sender email (the address you verified), sender name `Billr`, host `smtp-relay.brevo.com`, port `587`, username (your Brevo SMTP login, ending in `@smtp-brevo.com`) and password (the SMTP key). Save. Keep the SMTP key private, like the database password.
+
+Then change two templates on the same **Emails** page:
 
 1. Open **Authentication**, then **Emails** (under Notifications in the left menu). Use the **Templates** tab if one shows.
-2. Open **Magic link**. Set the subject to `Your Billr code` and replace the body with:
+2. Open **Magic link or OTP**. Set the subject to `Your Billr code` and replace the body with:
 
    ```html
    <h2>Your Billr code</h2>
@@ -46,5 +52,5 @@ Never share the **secret** key or the **service_role** key, and never put them i
 
 ## Limits to know about
 
-- **Who can get a code:** Supabase's built-in email service only sends to the email addresses of your Supabase team members, a few per hour. That is fine for testing with your own email. Before other people test, connect a free email service such as Resend under **Authentication > Emails > SMTP Settings**.
+- **Spam folder:** codes sent through Brevo from a Gmail or Yahoo address may land in spam at first. Sending from your own domain fixes that later.
 - **Phone sign-in** (the build plan's choice) needs a paid SMS provider. It can replace the email code later without changing how backup works.
