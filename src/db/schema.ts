@@ -1,7 +1,14 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+export const SYNCED_TABLES = ['businesses', 'clients', 'items', 'documents', 'document_lines'] as const;
+export type SyncedTable = (typeof SYNCED_TABLES)[number];
+
+// A random UUID made inside SQLite, so new rows get one without every insert having to pass it.
+const NEW_UID = `lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)), 2) || '-'
+  || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6)))`;
+
 // Each entry runs once, in order. Never edit a shipped migration; add a new one.
-const MIGRATIONS: string[] = [
+export const MIGRATIONS: string[] = [
   `
   CREATE TABLE businesses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,7 +81,36 @@ const MIGRATIONS: string[] = [
   CREATE INDEX idx_documents_business ON documents(business_id, updated_at);
   CREATE INDEX idx_lines_document ON document_lines(document_id, position);
   `,
+  syncMigration(),
 ];
+
+// Milestone 2: backup and sync.
+// - uid: the row's id in the cloud, the same on every phone.
+// - rev / synced_rev: rev goes up on every local change; the row needs uploading while synced_rev < rev.
+//   Triggers bump rev, so app code never has to remember to.
+// - sync_tombstones: rows deleted on this phone that the cloud still has.
+function syncMigration(): string {
+  const perTable = SYNCED_TABLES.map(
+    (t) => `
+  ALTER TABLE ${t} ADD COLUMN uid TEXT;
+  ALTER TABLE ${t} ADD COLUMN rev INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE ${t} ADD COLUMN synced_rev INTEGER NOT NULL DEFAULT 0;
+  UPDATE ${t} SET uid = ${NEW_UID};
+  CREATE UNIQUE INDEX idx_${t}_uid ON ${t}(uid);
+  CREATE INDEX idx_${t}_dirty ON ${t}(synced_rev, rev);
+  CREATE TRIGGER trg_${t}_uid AFTER INSERT ON ${t} WHEN NEW.uid IS NULL
+  BEGIN UPDATE ${t} SET uid = ${NEW_UID} WHERE id = NEW.id; END;
+  CREATE TRIGGER trg_${t}_rev AFTER UPDATE ON ${t} WHEN NEW.rev = OLD.rev AND NEW.synced_rev = OLD.synced_rev
+  BEGIN UPDATE ${t} SET rev = rev + 1 WHERE id = NEW.id; END;
+  CREATE TRIGGER trg_${t}_del AFTER DELETE ON ${t} WHEN OLD.synced_rev > 0
+  BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, uid) VALUES ('${t}', OLD.uid); END;`,
+  ).join('\n');
+  return `
+  CREATE TABLE sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+  CREATE TABLE sync_tombstones (tbl TEXT NOT NULL, uid TEXT NOT NULL, PRIMARY KEY (tbl, uid));
+  ${perTable}
+  `;
+}
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');

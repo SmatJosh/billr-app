@@ -7,7 +7,8 @@ import { createDocument, ensureBusiness, listDocuments, type DocListRow } from '
 import type { Business } from '../lib/types';
 import { formatMoney } from '../lib/format';
 import { formatDay, isOverdue } from '../lib/dates';
-import { Avatar, Button, Card, Chip, Empty, StatusPill, T } from '../components/ui';
+import { Avatar, Button, Card, Chip, Empty, LinkButton, StatusPill, T } from '../components/ui';
+import { useSync } from '../sync/SyncProvider';
 import { initials } from '../lib/format';
 import { color, font, radius, space } from '../theme';
 
@@ -20,6 +21,7 @@ export default function Home() {
   const [docs, setDocs] = useState<DocListRow[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
   const [creating, setCreating] = useState(false);
+  const backup = useSync();
 
   useFocusEffect(
     useCallback(() => {
@@ -51,6 +53,11 @@ export default function Home() {
         </T>
         <View style={{ flex: 1 }} />
         <Button label="Set up your business" onPress={() => router.push('/setup')} style={{ flex: 0 }} />
+        {backup.status !== 'unavailable' ? (
+          <View style={{ alignItems: 'center', marginTop: space.sm }}>
+            <LinkButton label="Used Billr before? Restore your invoices" onPress={() => router.push('/sign-in?restore=1')} />
+          </View>
+        ) : null}
       </View>
     );
   }
@@ -99,6 +106,14 @@ export default function Home() {
               <Button kind="secondary" label="Clients" onPress={() => router.push('/clients')} />
               <Button kind="secondary" label="Items" onPress={() => router.push('/items')} />
             </View>
+
+            {backup.status === 'signed-out' && docs.length > 0 ? (
+              <Pressable accessibilityRole="button" onPress={() => router.push('/sign-in')} style={{ minHeight: 48, justifyContent: 'center', marginTop: space.sm }}>
+                <T variant="sub">
+                  Only saved on this phone. <Text style={{ fontFamily: font.semibold, color: color.accent }}>Back up</Text>
+                </T>
+              </Pressable>
+            ) : null}
 
             <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.xl, marginBottom: space.md }}>
               <Chip label="All" on={filter === 'all'} onPress={() => setFilter('all')} />
