@@ -1,0 +1,40 @@
+{
+  "name": "billr-app",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@expo-google-fonts/geist": "^0.4.2",
+    "@expo-google-fonts/geist-mono": "^0.4.3",
+    "@expo-google-fonts/instrument-serif": "^0.4.1",
+    "@expo/metro-runtime": "~58.0.14",
+    "@react-native-community/datetimepicker": "9.2.1",
+    "expo": "~58.0.12",
+    "expo-constants": "~58.0.12",
+    "expo-font": "~58.0.8",
+    "expo-linking": "~58.0.13",
+    "expo-print": "~58.0.6",
+    "expo-router": "~58.0.21",
+    "expo-sharing": "~58.0.18",
+    "expo-sqlite": "~58.0.13",
+    "expo-status-bar": "~58.0.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-screens": "~4.30.0",
+    "react-native-web": "~0.21.4"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "private": true
+}
