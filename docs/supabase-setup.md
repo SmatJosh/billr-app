@@ -12,7 +12,7 @@ Billr keeps everything on the phone and backs it up to a Supabase project. You s
 ## 2. Create the backup tables
 
 1. In the left menu, open **SQL Editor** and click **New query**.
-2. Open [`supabase/migrations/0001_backup.sql`](../supabase/migrations/0001_backup.sql) from this repo, copy all of it, paste it into the editor and click **Run**.
+2. Open https://raw.githubusercontent.com/SmatJosh/billr-app/milestone-2-sign-in-backup/supabase/migrations/0001_backup.sql, select all the text (Ctrl + A), copy it (Ctrl + C), paste it into the editor and click **Run**.
 3. You should see "Success. No rows returned". Under **Table Editor** you will now see five tables: businesses, clients, items, documents and document_lines.
 
 These tables have row-level security switched on. Each signed-in person can only read and change their own rows, and nobody can delete rows through the app.
