@@ -1,3 +1,4 @@
+import { File, Paths } from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Linking } from 'react-native';
@@ -11,10 +12,22 @@ export async function previewDocument(input: InvoiceHtmlInput): Promise<void> {
 }
 
 // Makes the PDF on the phone (no internet needed) and opens the share sheet, where WhatsApp is one tap.
+// expo-print saves to a folder the share sheet is not allowed to read in Expo Go, so we take the PDF as
+// base64 and write it into our own cache folder, named after the invoice (INV-0001.pdf) so the client sees a real name.
 export async function sharePdf(input: InvoiceHtmlInput): Promise<boolean> {
-  const { uri } = await Print.printToFileAsync({ html: renderInvoiceHtml(input) });
   if (!(await Sharing.isAvailableAsync())) return false;
-  await Sharing.shareAsync(uri, {
+  const { uri: printUri, base64 } = await Print.printToFileAsync({ html: renderInvoiceHtml(input), base64: true });
+  if (!base64) throw new Error('The PDF came back empty');
+  const file = new File(Paths.cache, `${input.doc.number}.pdf`);
+  if (file.exists) file.delete();
+  file.create();
+  file.write(base64, { encoding: 'base64' });
+  try {
+    new File(printUri).delete();
+  } catch {
+    // Not ours to delete in Expo Go; the system clears its cache.
+  }
+  await Sharing.shareAsync(file.uri, {
     mimeType: 'application/pdf',
     UTI: 'com.adobe.pdf',
     dialogTitle: `${DOC_LABEL[input.doc.type]} ${input.doc.number}`,
