@@ -1,11 +1,11 @@
 # Billr
 
-Invoicing app for Nigerian solo service providers and small vendors. Android first, built with Expo (React Native, TypeScript).
+Invoicing app for Nigerian solo service providers and small vendors. Android first, built with Expo SDK 57 (React Native, TypeScript).
 
 ## Try it on your Android phone
 
 1. Install [Node.js](https://nodejs.org) (the LTS version) on your computer.
-2. Install **Expo Go** from the Play Store on your phone.
+2. Install **Expo Go** from the Play Store on your phone (it must support SDK 57).
 3. In a terminal on your computer:
    ```bash
    git clone https://github.com/SmatJosh/billr-app.git
