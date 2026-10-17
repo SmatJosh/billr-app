@@ -6,7 +6,6 @@ import { ensureBusiness, updateBusiness } from '../db/repo';
 import type { Business } from '../lib/types';
 import { useAutosave } from '../lib/useAutosave';
 import { Button, Card, Field, SaveState, Segmented, T } from '../components/ui';
-import { BackupCard } from '../components/BackupCard';
 import { color, space } from '../theme';
 
 export default function Setup() {
@@ -98,13 +97,6 @@ export default function Setup() {
           multiline
           placeholder="e.g. 50% deposit before work starts. Balance on pickup."
         />
-
-        {b.name.trim() ? (
-          <>
-            <T variant="section">Backup</T>
-            <BackupCard />
-          </>
-        ) : null}
 
         <Button
           label="Done"

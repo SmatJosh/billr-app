@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,6 +15,7 @@ import {
 } from 'react-native';
 import { color, font, radius, space, TOUCH } from '../theme';
 import type { DocStatus, DocType } from '../lib/types';
+import { Icon } from './icons';
 import { today } from '../lib/dates';
 
 export function T({ style, variant = 'body', ...rest }: TextProps & { variant?: 'body' | 'label' | 'sub' | 'title' | 'mono' | 'display' | 'section' }) {
@@ -141,6 +143,58 @@ export function Chip({ label, on, onPress }: { label: string; on?: boolean; onPr
   );
 }
 
+// Filter chips in one line that scrolls sideways past the screen edge, instead of wrapping onto a second line.
+export function ChipRow({ children, label }: { children: ReactNode; label?: string }) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      accessibilityLabel={label}
+      style={{ marginHorizontal: -space.lg, flexGrow: 0 }}
+      contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.lg }}
+    >
+      {children}
+    </ScrollView>
+  );
+}
+
+// Sending on WhatsApp is how most clients get their bill, so it gets WhatsApp's own colour and logo.
+export function WhatsAppButton({ onPress, busy, label = 'Send on WhatsApp' }: { onPress: () => void; busy?: boolean; label?: string }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      disabled={busy}
+      style={({ pressed }) => [styles.btn, { flex: 0, flexDirection: 'row', gap: 10, backgroundColor: color.whatsapp, opacity: pressed || busy ? 0.85 : 1 }]}
+    >
+      {busy ? (
+        <ActivityIndicator color={color.onInk} />
+      ) : (
+        <>
+          <Icon name="whatsapp" size={22} tint={color.onInk} />
+          <Text style={[styles.btnText, { color: color.onInk }]}>{label}</Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+// A small figure card: coloured dot, label, amount in the display font. Used on Home and Reports.
+export function StatTile({ label, value, dot, danger }: { label: string; value: string; dot?: string; danger?: boolean }) {
+  return (
+    <View style={[styles.card, { flex: 1, padding: space.md, borderColor: danger ? color.dueBg : color.line }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+        {dot ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot }} /> : null}
+        <Text style={[styles.label, { flexShrink: 1 }]} numberOfLines={1}>{label}</Text>
+      </View>
+      <Text style={[styles.display, { fontSize: 26, lineHeight: 32, color: danger ? color.dueTx : color.tx }]} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 export function Segmented<V extends string>({ options, value, onChange }: { options: { value: V; label: string }[]; value: V; onChange: (v: V) => void }) {
   return (
     <View style={styles.seg} accessibilityRole="radiogroup">
@@ -191,7 +245,8 @@ export function StatusPill({ status, align = 'flex-end' }: { status: PillKind; a
 }
 
 // The floating "+ New ..." button at the bottom right of a list.
-export function Fab({ label, onPress, busy }: { label: string; onPress: () => void; busy?: boolean }) {
+// bottom: lift it above the phone's own buttons on screens that have no tab bar.
+export function Fab({ label, onPress, busy, bottom = space.lg }: { label: string; onPress: () => void; busy?: boolean; bottom?: number }) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -200,7 +255,7 @@ export function Fab({ label, onPress, busy }: { label: string; onPress: () => vo
       style={({ pressed }) => ({
         position: 'absolute',
         right: space.lg,
-        bottom: space.lg,
+        bottom,
         height: 56,
         paddingHorizontal: 20,
         borderRadius: radius.card,

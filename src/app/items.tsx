@@ -5,11 +5,13 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { createItem, ensureBusiness, listItems } from '../db/repo';
 import type { Item } from '../lib/types';
 import { formatMoney } from '../lib/format';
-import { Button, Card, Empty, Row } from '../components/ui';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Card, Empty, Fab, Row } from '../components/ui';
 import { space } from '../theme';
 
 export default function Items() {
   const db = useSQLiteContext();
+  const insets = useSafeAreaInsets();
   const [items, setItems] = useState<Item[]>([]);
   const [businessId, setBusinessId] = useState<number | null>(null);
 
@@ -42,9 +44,7 @@ export default function Items() {
           </Card>
         )}
       />
-      <View style={{ position: 'absolute', left: space.lg, right: space.lg, bottom: space.xl, flexDirection: 'row' }}>
-        <Button label="Add item" onPress={add} />
-      </View>
+      <Fab label="New item" onPress={add} bottom={insets.bottom + space.lg} />
     </View>
   );
 }

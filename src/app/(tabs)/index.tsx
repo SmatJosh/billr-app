@@ -7,7 +7,7 @@ import { createDocument, ensureBusiness, listDocuments, type DocListRow } from '
 import type { Business } from '../../lib/types';
 import { formatMoneyShort } from '../../lib/format';
 import { outstanding, paidThisMonth } from '../../lib/reports';
-import { Card, Chip, Empty, Fab, T } from '../../components/ui';
+import { Chip, ChipRow, Empty, Fab, StatTile, T } from '../../components/ui';
 import { DocRow } from '../../components/DocRow';
 import { useSync } from '../../sync/SyncProvider';
 import { color, font, space } from '../../theme';
@@ -86,16 +86,18 @@ export default function Home() {
 
             <T variant="display" style={{ marginTop: space.sm, lineHeight: 46 }}>Who owes you</T>
             <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.md }}>
-              <Tile dot={color.paidTx} label={`PAID · ${MONTHS[new Date().getMonth()]}`} value={formatMoneyShort(paid, cur)} />
-              <Tile dot={color.partTx} label="PENDING" value={formatMoneyShort(owed.pendingKobo, cur)} />
-              <Tile dot={color.dueTx} label="OVERDUE" value={formatMoneyShort(owed.overdueKobo, cur)} danger={owed.overdueKobo > 0} />
+              <StatTile dot={color.paidTx} label={`PAID · ${MONTHS[new Date().getMonth()]}`} value={formatMoneyShort(paid, cur)} />
+              <StatTile dot={color.partTx} label="PENDING" value={formatMoneyShort(owed.pendingKobo, cur)} />
+              <StatTile dot={color.dueTx} label="OVERDUE" value={formatMoneyShort(owed.overdueKobo, cur)} danger={owed.overdueKobo > 0} />
             </View>
 
-            <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.lg, marginBottom: space.md, flexWrap: 'wrap' }}>
-              <Chip label="All" on={filter === 'all'} onPress={() => setFilter('all')} />
-              <Chip label="Unpaid" on={filter === 'unpaid'} onPress={() => setFilter('unpaid')} />
-              <Chip label="Paid" on={filter === 'paid'} onPress={() => setFilter('paid')} />
-              <Chip label="Drafts" on={filter === 'draft'} onPress={() => setFilter('draft')} />
+            <View style={{ marginTop: space.lg, marginBottom: space.md }}>
+              <ChipRow label="Show">
+                <Chip label="All" on={filter === 'all'} onPress={() => setFilter('all')} />
+                <Chip label="Unpaid" on={filter === 'unpaid'} onPress={() => setFilter('unpaid')} />
+                <Chip label="Paid" on={filter === 'paid'} onPress={() => setFilter('paid')} />
+                <Chip label="Drafts" on={filter === 'draft'} onPress={() => setFilter('draft')} />
+              </ChipRow>
             </View>
           </View>
         }
@@ -110,17 +112,5 @@ export default function Home() {
       />
       <Fab label="New invoice" onPress={newInvoice} busy={creating} />
     </View>
-  );
-}
-
-function Tile({ dot, label, value, danger }: { dot: string; label: string; value: string; danger?: boolean }) {
-  return (
-    <Card style={{ flex: 1, padding: space.md, borderColor: danger ? color.dueBg : color.line }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot }} />
-        <T variant="label" numberOfLines={1}>{label}</T>
-      </View>
-      <T variant="display" style={{ fontSize: 26, lineHeight: 32, color: danger ? color.dueTx : color.tx }} numberOfLines={1} adjustsFontSizeToFit>{value}</T>
-    </Card>
   );
 }

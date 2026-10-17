@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Button, Field, LinkButton, T } from '../components/ui';
 import { useSync } from '../sync/SyncProvider';
-import { color, space } from '../theme';
+import { color, font, space } from '../theme';
 
 function friendly(e: unknown): string {
   const msg = String((e as Error)?.message ?? e);
@@ -91,7 +91,7 @@ export default function SignIn() {
         ) : (
           <>
             <T style={{ color: color.tx2 }}>
-              Enter the code we sent to <T style={{ fontWeight: '600' }}>{cleanEmail}</T>. Check spam if it is not in your inbox.
+              Enter the code we sent to <T style={{ fontFamily: font.semibold }}>{cleanEmail}</T>. Check spam if it is not in your inbox.
             </T>
             <Field
               label="Code"
