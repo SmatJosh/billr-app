@@ -3,6 +3,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Linking } from 'react-native';
 import { renderInvoiceHtml, type InvoiceHtmlInput } from './invoiceHtml';
+import { renderStatementHtml, type StatementHtmlInput } from './statementHtml';
 import { formatMoney } from './format';
 import { formatDay } from './dates';
 import { DOC_LABEL } from './types';
@@ -15,10 +16,25 @@ export async function previewDocument(input: InvoiceHtmlInput): Promise<void> {
 // expo-print saves to a folder the share sheet is not allowed to read in Expo Go, so we take the PDF as
 // base64 and write it into our own cache folder, named after the invoice (INV-0001.pdf) so the client sees a real name.
 export async function sharePdf(input: InvoiceHtmlInput): Promise<boolean> {
-  if (!(await Sharing.isAvailableAsync())) return false;
-  const { uri: printUri, base64 } = await Print.printToFileAsync({ html: renderInvoiceHtml(input), base64: true });
-  if (!base64) throw new Error('The PDF came back empty');
   const name = input.receipt ? `Receipt-${input.doc.number}` : input.doc.number;
+  const title = input.receipt ? `Receipt for ${input.doc.number}` : `${DOC_LABEL[input.doc.type]} ${input.doc.number}`;
+  return shareHtmlAsPdf(renderInvoiceHtml(input), name, title);
+}
+
+// A client's statement, named after them: Statement-Grace-Okon.pdf.
+export async function shareStatementPdf(input: StatementHtmlInput): Promise<boolean> {
+  const safe = input.client.name.trim().replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'client';
+  return shareHtmlAsPdf(renderStatementHtml(input), `Statement-${safe}`, `Statement for ${input.client.name}`);
+}
+
+export async function previewStatement(input: StatementHtmlInput): Promise<void> {
+  await Print.printAsync({ html: renderStatementHtml(input) });
+}
+
+async function shareHtmlAsPdf(html: string, name: string, dialogTitle: string): Promise<boolean> {
+  if (!(await Sharing.isAvailableAsync())) return false;
+  const { uri: printUri, base64 } = await Print.printToFileAsync({ html, base64: true });
+  if (!base64) throw new Error('The PDF came back empty');
   const file = new File(Paths.cache, `${name}.pdf`);
   if (file.exists) file.delete();
   file.create();
@@ -28,11 +44,7 @@ export async function sharePdf(input: InvoiceHtmlInput): Promise<boolean> {
   } catch {
     // Not ours to delete in Expo Go; the system clears its cache.
   }
-  await Sharing.shareAsync(file.uri, {
-    mimeType: 'application/pdf',
-    UTI: 'com.adobe.pdf',
-    dialogTitle: input.receipt ? `Receipt for ${input.doc.number}` : `${DOC_LABEL[input.doc.type]} ${input.doc.number}`,
-  });
+  await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle });
   return true;
 }
 

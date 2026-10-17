@@ -483,8 +483,7 @@ export default function InvoiceEditor() {
             <WhatsAppButton onPress={whatsAppNow} busy={busy === 'wa'} />
           </View>
         )}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: space.md }}>
-          <View />
+        <View style={{ alignItems: 'center', marginTop: space.md }}>
           <LinkButton label="Delete" danger onPress={remove} />
         </View>
       </ScrollView>

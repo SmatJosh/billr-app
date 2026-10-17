@@ -3,7 +3,7 @@ import { formatMoney, formatQuantity } from './format.ts';
 import { formatDay } from './dates.ts';
 import { DOC_LABEL, PAYMENT_METHOD_LABEL, type BillrDocument, type Business, type Client, type DocumentLine, type Payment } from './types.ts';
 
-function esc(text: string | null | undefined): string {
+export function esc(text: string | null | undefined): string {
   return (text ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -12,9 +12,35 @@ function esc(text: string | null | undefined): string {
     .replace(/'/g, '&#39;');
 }
 
-function multiline(text: string): string {
+export function multiline(text: string): string {
   return esc(text).replace(/\n/g, '<br>');
 }
+
+// Shared by every PDF Billr makes (invoice, receipt, statement) so they look like one family.
+export const PDF_CSS = `
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Helvetica, Arial, sans-serif; color: #1C1915; font-size: 11pt; margin: 0; }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+  .biz { font-size: 16pt; font-weight: 700; }
+  .muted { color: #6A6356; }
+  .title { font-size: 24pt; font-weight: 400; font-family: Georgia, serif; text-align: right; }
+  .meta { margin-top: 18px; display: flex; gap: 32px; }
+  .k { font-size: 8pt; letter-spacing: .06em; color: #6A6356; font-weight: 700; text-transform: uppercase; }
+  .mono { font-family: 'Courier New', monospace; }
+  table { width: 100%; border-collapse: collapse; margin-top: 24px; }
+  th { text-align: left; font-size: 8pt; letter-spacing: .06em; color: #6A6356; border-bottom: 1px solid #DCD3BF; padding: 8px 6px; text-transform: uppercase; }
+  td { padding: 9px 6px; border-bottom: 1px solid #F1ECE0; vertical-align: top; }
+  .num { text-align: right; white-space: nowrap; }
+  .totals { margin-left: auto; width: 55%; margin-top: 12px; }
+  .totals div { display: flex; justify-content: space-between; padding: 5px 6px; }
+  .grand { border-top: 2px solid #1C1915; font-size: 14pt; font-weight: 700; margin-top: 4px; padding-top: 8px !important; }
+  .box { margin-top: 24px; padding: 12px 14px; border: 1px solid #DCD3BF; border-radius: 8px; }
+  .foot { margin-top: 32px; font-size: 8pt; color: #6A6356; text-align: center; }
+  .stamp { margin-top: 24px; padding: 14px; border-radius: 8px; text-align: center; font-size: 14pt; font-weight: 700; }
+  .stamp.full { background: #E3F3EA; color: #17633D; }
+  .stamp.part { background: #FFE6D2; color: #8F3B00; }
+`;
 
 export type InvoiceHtmlInput = {
   doc: BillrDocument;
@@ -71,30 +97,7 @@ export function renderInvoiceHtml({ doc, lines, business, client, payments = [],
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-  @page { size: A4; margin: 18mm 16mm; }
-  * { box-sizing: border-box; }
-  body { font-family: Helvetica, Arial, sans-serif; color: #1C1915; font-size: 11pt; margin: 0; }
-  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
-  .biz { font-size: 16pt; font-weight: 700; }
-  .muted { color: #6A6356; }
-  .title { font-size: 24pt; font-weight: 400; font-family: Georgia, serif; text-align: right; }
-  .meta { margin-top: 18px; display: flex; gap: 32px; }
-  .k { font-size: 8pt; letter-spacing: .06em; color: #6A6356; font-weight: 700; text-transform: uppercase; }
-  .mono { font-family: 'Courier New', monospace; }
-  table { width: 100%; border-collapse: collapse; margin-top: 24px; }
-  th { text-align: left; font-size: 8pt; letter-spacing: .06em; color: #6A6356; border-bottom: 1px solid #DCD3BF; padding: 8px 6px; text-transform: uppercase; }
-  td { padding: 9px 6px; border-bottom: 1px solid #F1ECE0; vertical-align: top; }
-  .num { text-align: right; white-space: nowrap; }
-  .totals { margin-left: auto; width: 55%; margin-top: 12px; }
-  .totals div { display: flex; justify-content: space-between; padding: 5px 6px; }
-  .grand { border-top: 2px solid #1C1915; font-size: 14pt; font-weight: 700; margin-top: 4px; padding-top: 8px !important; }
-  .box { margin-top: 24px; padding: 12px 14px; border: 1px solid #DCD3BF; border-radius: 8px; }
-  .foot { margin-top: 32px; font-size: 8pt; color: #6A6356; text-align: center; }
-  .stamp { margin-top: 24px; padding: 14px; border-radius: 8px; text-align: center; font-size: 14pt; font-weight: 700; }
-  .stamp.full { background: #E3F3EA; color: #17633D; }
-  .stamp.part { background: #FFE6D2; color: #8F3B00; }
-</style></head>
+<style>${PDF_CSS}</style></head>
 <body>
   <div class="top">
     <div>
