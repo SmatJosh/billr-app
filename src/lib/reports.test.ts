@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { currenciesUsed, daysBetween, localDay, moneyIn, outstanding, paidThisMonth, quoteSummary, toCsv, type ReportDoc } from './reports.ts';
+import { balanceOf, currenciesUsed, daysBetween, localDay, moneyIn, outstanding, paidThisMonth, quoteSummary, toCsv, type ReportDoc } from './reports.ts';
 
 const NOW = '2026-10-17';
 
@@ -110,7 +110,40 @@ test('CSV export quotes awkward text and keeps amounts as plain numbers', () => 
     doc({ number: 'QUO-0001', type: 'quote', status: 'sent', issueDate: '2026-10-01', clientName: null }),
   ]);
   const lines = csv.trimEnd().split('\r\n');
-  assert.equal(lines[0], 'Number,Type,Client,Issue date,Due or valid until,Status,Paid on,Currency,Total');
-  assert.equal(lines[1], 'QUO-0001,Quote,,2026-10-01,2026-10-08,Sent,,NGN,100.00');
-  assert.equal(lines[2], 'INV-0002,Invoice,"Bello, Funke ""Mama B""",2026-10-05,2026-10-08,Paid,2026-10-10,NGN,45000.50');
+  assert.equal(lines[0], 'Number,Type,Client,Issue date,Due or valid until,Status,Paid on,Currency,Total,Paid so far');
+  assert.equal(lines[1], 'QUO-0001,Quote,,2026-10-01,2026-10-08,Sent,,NGN,100.00,');
+  assert.equal(lines[2], 'INV-0002,Invoice,"Bello, Funke ""Mama B""",2026-10-05,2026-10-08,Paid,2026-10-10,NGN,45000.50,45000.50');
+});
+
+test('deposits count on the day the money came in, and only the balance is still owed', () => {
+  const deposit = doc({
+    status: 'sent',
+    totalKobo: 100_000_00,
+    dueDate: '2026-10-20',
+    sentAt: '2026-09-28 12:00:00',
+    updatedAt: '2026-10-16 12:00:00',
+    payments: [
+      { amountKobo: 40_000_00, paidOn: '2026-09-30' },
+      { amountKobo: 10_000_00, paidOn: '2026-10-02' },
+    ],
+  });
+  const settled = doc({
+    totalKobo: 30_000_00,
+    sentAt: '2026-10-01 12:00:00',
+    payments: [
+      { amountKobo: 10_000_00, paidOn: '2026-09-29' },
+      { amountKobo: 20_000_00, paidOn: '2026-10-05' },
+    ],
+  });
+  const docs = [deposit, settled];
+  const oct = moneyIn(docs, 'NGN', 'month', NOW);
+  assert.equal(oct.totalKobo, 30_000_00); // 10k on the deposit invoice + 20k on the settled one
+  assert.equal(oct.previousKobo, 50_000_00); // the two September payments
+  assert.deepEqual(oct.bars.map((b) => b.kobo), [30_000_00, 0, 0, 0, 0]);
+  assert.equal(oct.avgDaysToPay, 4); // only the settled one: sent 1 Oct, last payment 5 Oct
+  assert.equal(balanceOf(deposit), 50_000_00);
+  assert.deepEqual(outstanding(docs, 'NGN', NOW), { pendingKobo: 50_000_00, pendingCount: 1, overdueKobo: 0, overdueCount: 0 });
+  assert.equal(paidThisMonth(docs, 'NGN', NOW), 30_000_00);
+  const csv = toCsv([deposit]).trimEnd().split('\r\n');
+  assert.equal(csv[1].split(',').slice(5).join(','), 'Sent,,NGN,100000.00,50000.00');
 });

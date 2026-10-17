@@ -3,13 +3,13 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, T
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { convertDocument, deleteDocument, ensureBusiness, getClient, getDocument, getLines, markSent, updateDocument } from '../../db/repo';
-import { DOC_LABEL, type BillrDocument, type Business, type Client, type DocType, type DocumentLine } from '../../lib/types';
+import { convertDocument, deleteDocument, deletePayment, ensureBusiness, getClient, getDocument, getLines, listPayments, markSent, updateDocument } from '../../db/repo';
+import { DOC_LABEL, PAYMENT_METHOD_LABEL, type BillrDocument, type Business, type Client, type DocType, type DocumentLine, type Payment } from '../../lib/types';
 import { computeTotals, parseNairaToKobo, parsePercent, VAT_RATE_PERCENT } from '../../lib/money';
-import { addDays, PAYMENT_TERMS, QUOTE_VALIDITY } from '../../lib/dates';
+import { addDays, formatDayShort, PAYMENT_TERMS, QUOTE_VALIDITY } from '../../lib/dates';
 import { formatMoney, formatQuantity, initials, koboToInput } from '../../lib/format';
 import { useAutosave, type SaveStatus } from '../../lib/useAutosave';
-import { openWhatsApp, previewDocument, sharePdf, whatsAppMessage } from '../../lib/share';
+import { openWhatsApp, previewDocument, receiptMessage, sharePdf, whatsAppMessage } from '../../lib/share';
 import { Avatar, Button, Card, Chip, ChipRow, Divider, Field, LinkButton, pillFor, Row, SaveState, Segmented, StatusPill, T, WhatsAppButton, styles as ui } from '../../components/ui';
 import { DayPicker } from '../../components/DayPicker';
 import { LineEditor } from '../../components/LineEditor';
@@ -25,9 +25,10 @@ export default function InvoiceEditor() {
   const [doc, setDoc] = useState<BillrDocument | null>(null);
   const [lines, setLines] = useState<DocumentLine[]>([]);
   const [client, setClient] = useState<Client | null>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [discountText, setDiscountText] = useState('');
   const [lineStatus, setLineStatus] = useState<SaveStatus>('idle');
-  const [busy, setBusy] = useState<'pdf' | 'wa' | 'preview' | 'convert' | null>(null);
+  const [busy, setBusy] = useState<'pdf' | 'wa' | 'preview' | 'convert' | 'receipt' | null>(null);
   const loadedOnce = useRef(false);
 
   const autosave = useAutosave<BillrDocument>(async (patch) => {
@@ -35,10 +36,11 @@ export default function InvoiceEditor() {
   });
 
   const load = useCallback(async () => {
-    const [b, d, l] = await Promise.all([ensureBusiness(db), getDocument(db, docId), getLines(db, docId)]);
+    const [b, d, l, p] = await Promise.all([ensureBusiness(db), getDocument(db, docId), getLines(db, docId), listPayments(db, docId)]);
     setBusiness(b);
     setDoc(d);
     setLines(l);
+    setPayments(p);
     setClient(d?.clientId ? await getClient(db, d.clientId) : null);
     if (d && !loadedOnce.current) {
       setDiscountText(d.discountType === 'flat' ? koboToInput(d.discountFlatKobo) : d.discountPercent ? formatQuantity(d.discountPercent) : '');
@@ -46,7 +48,7 @@ export default function InvoiceEditor() {
     }
   }, [db, docId]);
 
-  // Reload when coming back from the client or item picker.
+  // Reload when coming back from the client or item picker, or after recording a payment.
   useFocusEffect(
     useCallback(() => {
       load();
@@ -63,6 +65,9 @@ export default function InvoiceEditor() {
   const totals = computeTotals({ ...doc, lines });
   const isInvoice = doc.type === 'invoice';
   const isQuote = doc.type === 'quote';
+  const paidKobo = payments.reduce((s, p) => s + p.amountKobo, 0);
+  const balanceKobo = Math.max(0, computeTotals({ ...doc, lines }).totalKobo - paidKobo);
+  const legacyPaid = isInvoice && doc.status === 'paid' && payments.length === 0;
   const readyToConvert = !isInvoice && doc.status === 'accepted';
   const label = DOC_LABEL[doc.type].toLowerCase();
   const status: SaveStatus = autosave.status === 'error' || lineStatus === 'error' ? 'error' : autosave.status === 'saving' || lineStatus === 'saving' ? 'saving' : autosave.status === 'saved' || lineStatus === 'saved' ? 'saved' : 'idle';
@@ -176,9 +181,62 @@ export default function InvoiceEditor() {
     }
   }
 
-  // "Not yet" goes back to sent, or draft if the invoice was never shared.
-  function setPaid(paid: boolean) {
-    set({ status: paid ? 'paid' : doc!.sentAt ? 'sent' : 'draft' });
+  async function recordPayment() {
+    if (!readyToSend()) return;
+    await go(`/invoice/record-payment?doc=${doc!.id}`);
+  }
+
+  function removePayment(p: Payment) {
+    Alert.alert(`Remove the ${money(p.amountKobo)} payment?`, `Received ${formatDayShort(p.paidOn)}.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          await deletePayment(db, p);
+          await load();
+        },
+      },
+    ]);
+  }
+
+  // A receipt goes as a PDF (looks official, good for records) or as a short WhatsApp thank-you.
+  function sendReceipt() {
+    if (!business || !doc || !payments.length) return;
+    const last = payments[payments.length - 1].amountKobo;
+    const options: { text: string; onPress?: () => void; style?: 'cancel' }[] = [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'PDF receipt',
+        onPress: async () => {
+          setBusy('receipt');
+          try {
+            await autosave.flush();
+            if (!(await sharePdf({ doc, lines, business, client, payments, receipt: true }))) Alert.alert('Sharing is not available on this phone');
+          } catch (e) {
+            Alert.alert('Could not make the receipt', String(e));
+          } finally {
+            setBusy(null);
+          }
+        },
+      },
+    ];
+    if (client?.phone) {
+      options.push({
+        text: 'WhatsApp message',
+        onPress: async () => {
+          if (!(await openWhatsApp(client.phone, receiptMessage({ doc, business, client }, last, balanceKobo)))) {
+            Alert.alert('WhatsApp did not open', 'Check that WhatsApp is installed, or send the PDF receipt.');
+          }
+        },
+      });
+    }
+    Alert.alert('Send a receipt', `For ${doc.number}`, options);
+  }
+
+  // Invoices marked paid before payments could be recorded can still be set back.
+  function markNotPaid() {
+    set({ status: doc!.sentAt ? 'sent' : 'draft' });
   }
 
   return (
@@ -198,19 +256,49 @@ export default function InvoiceEditor() {
         <Card style={{ marginTop: space.md, padding: space.lg, gap: space.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <T style={{ fontFamily: font.semibold }}>{DOC_LABEL[doc.type]}</T>
-            <StatusPill status={pillFor(doc)} />
+            <StatusPill status={pillFor({ ...doc, paidKobo })} />
           </View>
-          {isInvoice ? (
+          {isInvoice && legacyPaid ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <T variant="sub">Marked as paid in full.</T>
+              <LinkButton label="Not paid yet" onPress={markNotPaid} />
+            </View>
+          ) : isInvoice ? (
             <>
-              <T variant="sub">Has the client paid?</T>
-              <Segmented
-                options={[
-                  { value: 'no', label: 'Not yet' },
-                  { value: 'yes', label: 'Paid' },
-                ]}
-                value={doc.status === 'paid' ? 'yes' : 'no'}
-                onChange={(v) => setPaid(v === 'yes')}
-              />
+              {payments.length ? (
+                <View style={{ gap: space.sm }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <T variant="sub">
+                      Paid <T style={{ fontFamily: font.semibold }}>{money(paidKobo)}</T> of {money(totals.totalKobo)}
+                    </T>
+                    {balanceKobo > 0 ? <T variant="sub">{money(balanceKobo)} left</T> : null}
+                  </View>
+                  <View style={{ height: 8, borderRadius: 4, backgroundColor: color.muted, overflow: 'hidden' }}>
+                    <View style={{ height: 8, borderRadius: 4, width: `${Math.min(100, totals.totalKobo ? (paidKobo / totals.totalKobo) * 100 : 0)}%`, backgroundColor: balanceKobo ? color.accent : color.paidTx }} />
+                  </View>
+                  {payments.map((p) => (
+                    <Pressable
+                      key={p.id}
+                      accessibilityRole="button"
+                      accessibilityHint="Remove this payment"
+                      onPress={() => removePayment(p)}
+                      style={{ flexDirection: 'row', justifyContent: 'space-between', minHeight: 44, alignItems: 'center' }}
+                    >
+                      <T variant="sub" style={{ flex: 1 }} numberOfLines={1}>
+                        {formatDayShort(p.paidOn)} · {PAYMENT_METHOD_LABEL[p.method]}
+                        {p.note ? ` · ${p.note}` : ''}
+                      </T>
+                      <T variant="mono">{money(p.amountKobo)}</T>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <T variant="sub">When money comes in, record it here: a deposit, part payment or the full amount.</T>
+              )}
+              <View style={{ flexDirection: 'row', gap: space.sm }}>
+                {balanceKobo > 0 ? <Button kind="secondary" label="Add payment" onPress={recordPayment} /> : null}
+                {payments.length ? <Button kind="secondary" label="Send receipt" onPress={sendReceipt} busy={busy === 'receipt'} /> : null}
+              </View>
             </>
           ) : doc.status === 'converted' ? (
               <T variant="sub">Already turned into the next document. Find it under {doc.type === 'quote' ? 'Quotes or Home' : 'Home'}.</T>

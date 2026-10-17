@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-export const SYNCED_TABLES = ['businesses', 'clients', 'items', 'documents', 'document_lines'] as const;
+export const SYNCED_TABLES = ['businesses', 'clients', 'items', 'documents', 'document_lines', 'payments'] as const;
 export type SyncedTable = (typeof SYNCED_TABLES)[number];
 
 // A random UUID made inside SQLite, so new rows get one without every insert having to pass it.
@@ -81,7 +81,22 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX idx_documents_business ON documents(business_id, updated_at);
   CREATE INDEX idx_lines_document ON document_lines(document_id, position);
   `,
-  syncMigration(),
+  syncMigration(['businesses', 'clients', 'items', 'documents', 'document_lines'], true),
+  // Milestone 4: payments, so an invoice can take a deposit and part payments, and Reports use real payment days.
+  `
+  CREATE TABLE payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    amount_kobo INTEGER NOT NULL DEFAULT 0,
+    paid_on TEXT NOT NULL,
+    method TEXT NOT NULL DEFAULT 'transfer',
+    note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX idx_payments_document ON payments(document_id, paid_on);
+  ${syncMigration(['payments'], false)}
+  `,
 ];
 
 // Milestone 2: backup and sync.
@@ -89,8 +104,8 @@ export const MIGRATIONS: string[] = [
 // - rev / synced_rev: rev goes up on every local change; the row needs uploading while synced_rev < rev.
 //   Triggers bump rev, so app code never has to remember to.
 // - sync_tombstones: rows deleted on this phone that the cloud still has.
-function syncMigration(): string {
-  const perTable = SYNCED_TABLES.map(
+function syncMigration(tables: readonly SyncedTable[], withMeta: boolean): string {
+  const perTable = tables.map(
     (t) => `
   ALTER TABLE ${t} ADD COLUMN uid TEXT;
   ALTER TABLE ${t} ADD COLUMN rev INTEGER NOT NULL DEFAULT 1;
@@ -105,9 +120,12 @@ function syncMigration(): string {
   CREATE TRIGGER trg_${t}_del AFTER DELETE ON ${t} WHEN OLD.synced_rev > 0
   BEGIN INSERT OR REPLACE INTO sync_tombstones (tbl, uid) VALUES ('${t}', OLD.uid); END;`,
   ).join('\n');
+  const meta = withMeta
+    ? `CREATE TABLE sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+  CREATE TABLE sync_tombstones (tbl TEXT NOT NULL, uid TEXT NOT NULL, PRIMARY KEY (tbl, uid));`
+    : '';
   return `
-  CREATE TABLE sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-  CREATE TABLE sync_tombstones (tbl TEXT NOT NULL, uid TEXT NOT NULL, PRIMARY KEY (tbl, uid));
+  ${meta}
   ${perTable}
   `;
 }

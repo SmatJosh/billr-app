@@ -6,7 +6,7 @@ import { DOC_LABEL, type BillrDocument } from './types.ts';
 export type ReportDoc = Pick<
   BillrDocument,
   'type' | 'number' | 'status' | 'totalKobo' | 'currency' | 'issueDate' | 'dueDate' | 'sentAt' | 'updatedAt'
-> & { clientName: string | null };
+> & { clientName: string | null; payments?: { amountKobo: number; paidOn: string }[] };
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -17,10 +17,27 @@ export function localDay(stamp: string): string {
   return Number.isNaN(d.getTime()) ? stamp.slice(0, 10) : toDay(d);
 }
 
-// Billr does not record payments on their own yet, so a paid invoice counts as paid on the day it was
-// last changed: the day it was marked paid, unless it was edited after. Use the payment date once payments exist.
+// Invoices marked paid before Billr recorded payments have none, so they count as paid in full on the day
+// they were last changed: the day they were marked paid, unless edited after.
 export function paidDay(d: Pick<ReportDoc, 'updatedAt'>): string {
   return localDay(d.updatedAt);
+}
+
+// The money received on an invoice, each with the day it came in.
+export function paymentsOf(d: ReportDoc): { kobo: number; day: string }[] {
+  if (d.type !== 'invoice') return [];
+  if (d.payments?.length) return d.payments.map((p) => ({ kobo: p.amountKobo, day: p.paidOn }));
+  return d.status === 'paid' ? [{ kobo: d.totalKobo, day: paidDay(d) }] : [];
+}
+
+export function paidSoFar(d: ReportDoc): number {
+  return paymentsOf(d).reduce((s, p) => s + p.kobo, 0);
+}
+
+// The day an invoice was paid off: its last payment.
+function settledDay(d: ReportDoc): string | null {
+  const days = paymentsOf(d).map((p) => p.day).sort();
+  return d.status === 'paid' && days.length ? days[days.length - 1] : null;
 }
 
 export function daysBetween(from: string, to: string): number {
@@ -38,12 +55,13 @@ export type MoneyIn = {
   avgDaysToPay: number | null;
 };
 
-const isPaidInvoice = (d: ReportDoc, currency: Currency) => d.type === 'invoice' && d.status === 'paid' && d.currency === currency;
+const received = (docs: ReportDoc[], currency: Currency) =>
+  docs.filter((d) => d.currency === currency).flatMap((d) => paymentsOf(d).map((p) => ({ d, ...p })));
 
 // Money in this month (by week) or this year (by month), with the previous month or year for comparison.
 export function moneyIn(docs: ReportDoc[], currency: Currency, period: Period, now: string = today()): MoneyIn {
   const [y, m] = now.split('-').map(Number);
-  const paid = docs.filter((d) => isPaidInvoice(d, currency)).map((d) => ({ d, day: paidDay(d) }));
+  const paid = received(docs, currency);
   const ym = (day: string) => day.slice(0, 7);
   const thisMonth = now.slice(0, 7);
   const prevMonthDate = new Date(y, m - 2, 1);
@@ -63,32 +81,38 @@ export function moneyIn(docs: ReportDoc[], currency: Currency, period: Period, n
       const kobo = inPeriod.filter(({ day }) => {
         const n = Number(day.slice(8, 10));
         return n >= start && n <= end;
-      }).reduce((s, { d }) => s + d.totalKobo, 0);
+      }).reduce((s, p) => s + p.kobo, 0);
       return { label: `${start} ${short}`, kobo, current: dayOfMonth >= start && dayOfMonth <= end };
     });
   } else {
     bars = MONTHS.map((name, i) => ({
       label: name[0],
-      kobo: inPeriod.filter(({ day }) => Number(day.slice(5, 7)) === i + 1).reduce((s, { d }) => s + d.totalKobo, 0),
+      kobo: inPeriod.filter(({ day }) => Number(day.slice(5, 7)) === i + 1).reduce((s, p) => s + p.kobo, 0),
       current: i + 1 === m,
     }));
   }
 
   const byClient = new Map<string, number>();
-  for (const { d } of inPeriod) {
+  for (const { d, kobo } of inPeriod) {
     const name = d.clientName?.trim() || 'No client';
-    byClient.set(name, (byClient.get(name) ?? 0) + d.totalKobo);
+    byClient.set(name, (byClient.get(name) ?? 0) + kobo);
   }
   const topClients = [...byClient.entries()]
     .map(([name, kobo]) => ({ name, kobo }))
     .sort((a, b) => b.kobo - a.kobo || a.name.localeCompare(b.name))
     .slice(0, 3);
 
-  const waits = inPeriod.filter(({ d }) => d.sentAt).map(({ d, day }) => Math.max(0, daysBetween(localDay(d.sentAt!), day)));
+  // Days from sending to the last payment, for invoices paid off in this period.
+  const inThis = (day: string) => (period === 'month' ? ym(day) === thisMonth : day.startsWith(`${y}-`));
+  const waits = docs
+    .filter((d) => d.type === 'invoice' && d.currency === currency && d.sentAt)
+    .map((d) => ({ d, end: settledDay(d) }))
+    .filter((x): x is { d: ReportDoc; end: string } => !!x.end && inThis(x.end))
+    .map(({ d, end }) => Math.max(0, daysBetween(localDay(d.sentAt!), end)));
 
   return {
-    totalKobo: inPeriod.reduce((s, { d }) => s + d.totalKobo, 0),
-    previousKobo: previous.reduce((s, { d }) => s + d.totalKobo, 0),
+    totalKobo: inPeriod.reduce((s, p) => s + p.kobo, 0),
+    previousKobo: previous.reduce((s, p) => s + p.kobo, 0),
     previousLabel: period === 'month' ? MONTHS[prevMonthDate.getMonth()] : String(y - 1),
     bars,
     topClients,
@@ -100,18 +124,22 @@ export function periodLabel(period: Period, now: string = today()): string {
   return period === 'month' ? MONTHS[Number(now.slice(5, 7)) - 1] : now.slice(0, 4);
 }
 
-// Sent invoices not yet paid, split into not yet due and overdue.
+// What sent invoices still owe after any deposits, split into not yet due and overdue.
 export function outstanding(docs: ReportDoc[], currency: Currency, now: string = today()) {
-  const unpaid = docs.filter((d) => d.type === 'invoice' && d.status === 'sent' && d.currency === currency);
+  const unpaid = docs.filter((d) => d.type === 'invoice' && d.status === 'sent' && d.currency === currency && balanceOf(d) > 0);
   const overdue = unpaid.filter((d) => d.dueDate < now);
   const pending = unpaid.filter((d) => d.dueDate >= now);
-  const sum = (list: ReportDoc[]) => list.reduce((s, d) => s + d.totalKobo, 0);
+  const sum = (list: ReportDoc[]) => list.reduce((s, d) => s + balanceOf(d), 0);
   return { pendingKobo: sum(pending), pendingCount: pending.length, overdueKobo: sum(overdue), overdueCount: overdue.length };
+}
+
+export function balanceOf(d: ReportDoc): number {
+  return Math.max(0, d.totalKobo - paidSoFar(d));
 }
 
 export function paidThisMonth(docs: ReportDoc[], currency: Currency, now: string = today()): number {
   const month = now.slice(0, 7);
-  return docs.filter((d) => isPaidInvoice(d, currency) && paidDay(d).startsWith(month)).reduce((s, d) => s + d.totalKobo, 0);
+  return received(docs, currency).filter((p) => p.day.startsWith(month)).reduce((s, p) => s + p.kobo, 0);
 }
 
 // Awaiting: quotes and proformas sent and not yet answered.
@@ -150,7 +178,7 @@ const STATUS_WORD: Record<string, string> = {
 
 // A spreadsheet of every invoice, quote and proforma, for an accountant. Amounts are plain numbers so they add up in Excel.
 export function toCsv(docs: ReportDoc[]): string {
-  const header = ['Number', 'Type', 'Client', 'Issue date', 'Due or valid until', 'Status', 'Paid on', 'Currency', 'Total'];
+  const header = ['Number', 'Type', 'Client', 'Issue date', 'Due or valid until', 'Status', 'Paid on', 'Currency', 'Total', 'Paid so far'];
   const rows = [...docs]
     .sort((a, b) => (a.issueDate === b.issueDate ? a.number.localeCompare(b.number) : a.issueDate.localeCompare(b.issueDate)))
     .map((d) => [
@@ -160,9 +188,10 @@ export function toCsv(docs: ReportDoc[]): string {
       d.issueDate,
       d.dueDate,
       STATUS_WORD[d.status] ?? d.status,
-      d.type === 'invoice' && d.status === 'paid' ? paidDay(d) : '',
+      settledDay(d) ?? '',
       d.currency,
       amount(d.totalKobo),
+      d.type === 'invoice' ? amount(paidSoFar(d)) : '',
     ]);
   return [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
