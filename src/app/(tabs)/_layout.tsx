@@ -21,7 +21,7 @@ export default function TabsLayout() {
   );
 }
 
-// The design's bar: five equal tabs, the active icon on a saffron pill.
+// The design's bar: five equal tabs, the open one's icon solid on a saffron pill.
 function TabBar({ state, navigation, insets }: BottomTabBarProps) {
   return (
     <View
@@ -45,7 +45,7 @@ function TabBar({ state, navigation, insets }: BottomTabBarProps) {
             style={{ flex: 1, height: 72, alignItems: 'center', justifyContent: 'center', gap: 4 }}
           >
             <View style={{ width: 60, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? color.accentTint : 'transparent' }}>
-              <Icon name={tab.icon} tint={on ? color.ink : color.tx2} />
+              <Icon name={tab.icon} tint={on ? color.ink : color.tx2} filled={on} />
             </View>
             <Text style={{ fontSize: 12, fontFamily: on ? font.semibold : font.medium, color: on ? color.tx : color.tx2 }}>{tab.title}</Text>
           </Pressable>
