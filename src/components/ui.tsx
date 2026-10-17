@@ -13,7 +13,8 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { color, font, radius, space, TOUCH } from '../theme';
-import type { DocStatus } from '../lib/types';
+import type { DocStatus, DocType } from '../lib/types';
+import { today } from '../lib/dates';
 
 export function T({ style, variant = 'body', ...rest }: TextProps & { variant?: 'body' | 'label' | 'sub' | 'title' | 'mono' | 'display' | 'section' }) {
   return <Text {...rest} style={[styles[variant], style]} />;
@@ -161,18 +162,68 @@ export function Segmented<V extends string>({ options, value, onChange }: { opti
   );
 }
 
-const STATUS: Record<DocStatus | 'overdue', { label: string; bg: string; tx: string }> = {
+export type PillKind = DocStatus | 'overdue' | 'awaiting';
+
+const STATUS: Record<PillKind, { label: string; bg: string; tx: string }> = {
   draft: { label: 'Draft', bg: color.muted, tx: color.tx2 },
   sent: { label: 'Sent', bg: color.accentSoft, tx: color.accentOnSoft },
   paid: { label: 'Paid', bg: color.paidBg, tx: color.paidTx },
   overdue: { label: 'Overdue', bg: color.dueBg, tx: color.dueTx },
+  awaiting: { label: 'Awaiting reply', bg: color.partBg, tx: color.partTx },
+  accepted: { label: 'Accepted', bg: color.paidBg, tx: color.paidTx },
+  declined: { label: 'Declined', bg: color.muted, tx: color.tx2 },
+  converted: { label: 'Converted', bg: color.paidBg, tx: color.paidTx },
 };
 
-export function StatusPill({ status }: { status: DocStatus | 'overdue' }) {
+// What a document's pill says: an unpaid invoice past its due date is overdue; a sent quote awaits a reply.
+export function pillFor(d: { type: DocType; status: DocStatus; dueDate: string }, now: string = today()): PillKind {
+  if (d.type === 'invoice') return d.status === 'sent' && d.dueDate < now ? 'overdue' : d.status;
+  return d.status === 'sent' ? 'awaiting' : d.status;
+}
+
+export function StatusPill({ status, align = 'flex-end' }: { status: PillKind; align?: 'flex-start' | 'flex-end' }) {
   const s = STATUS[status];
   return (
-    <View style={{ backgroundColor: s.bg, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 3, alignSelf: 'flex-end' }}>
+    <View style={{ backgroundColor: s.bg, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 3, alignSelf: align }}>
       <Text style={{ fontFamily: font.semibold, fontSize: 12, color: s.tx }}>{s.label}</Text>
+    </View>
+  );
+}
+
+// The floating "+ New ..." button at the bottom right of a list.
+export function Fab({ label, onPress, busy }: { label: string; onPress: () => void; busy?: boolean }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      disabled={busy}
+      style={({ pressed }) => ({
+        position: 'absolute',
+        right: space.lg,
+        bottom: space.lg,
+        height: 56,
+        paddingHorizontal: 20,
+        borderRadius: radius.card,
+        backgroundColor: pressed ? color.ink2 : color.ink,
+        justifyContent: 'center',
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOpacity: 0.18,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 6 },
+      })}
+    >
+      <Text style={{ color: color.onInk, fontFamily: font.semibold, fontSize: 15 }}>+ {label}</Text>
+    </Pressable>
+  );
+}
+
+// The big serif title at the top of each tab, as in the design.
+export function ScreenTitle({ title, right }: { title: string; right?: ReactNode }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56 }}>
+      <Text style={[styles.display, { fontSize: 44, lineHeight: 50, flex: 1 }]} accessibilityRole="header">{title}</Text>
+      {right}
     </View>
   );
 }

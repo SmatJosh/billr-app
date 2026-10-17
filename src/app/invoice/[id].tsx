@@ -3,14 +3,14 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, T
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { deleteDocument, ensureBusiness, getClient, getDocument, getLines, markSent, updateDocument } from '../../db/repo';
-import type { BillrDocument, Business, Client, DocumentLine } from '../../lib/types';
+import { convertDocument, deleteDocument, ensureBusiness, getClient, getDocument, getLines, markSent, updateDocument } from '../../db/repo';
+import { DOC_LABEL, type BillrDocument, type Business, type Client, type DocType, type DocumentLine } from '../../lib/types';
 import { computeTotals, parseNairaToKobo, parsePercent, VAT_RATE_PERCENT } from '../../lib/money';
-import { addDays, PAYMENT_TERMS } from '../../lib/dates';
+import { addDays, PAYMENT_TERMS, QUOTE_VALIDITY } from '../../lib/dates';
 import { formatMoney, formatQuantity, initials, koboToInput } from '../../lib/format';
 import { useAutosave, type SaveStatus } from '../../lib/useAutosave';
 import { openWhatsApp, previewDocument, sharePdf, whatsAppMessage } from '../../lib/share';
-import { Avatar, Button, Card, Chip, Divider, Field, LinkButton, Row, SaveState, Segmented, T, styles as ui } from '../../components/ui';
+import { Avatar, Button, Card, Chip, Divider, Field, LinkButton, pillFor, Row, SaveState, Segmented, StatusPill, T, styles as ui } from '../../components/ui';
 import { DayPicker } from '../../components/DayPicker';
 import { LineEditor } from '../../components/LineEditor';
 import { color, font, space } from '../../theme';
@@ -27,7 +27,7 @@ export default function InvoiceEditor() {
   const [client, setClient] = useState<Client | null>(null);
   const [discountText, setDiscountText] = useState('');
   const [lineStatus, setLineStatus] = useState<SaveStatus>('idle');
-  const [busy, setBusy] = useState<'pdf' | 'wa' | 'preview' | null>(null);
+  const [busy, setBusy] = useState<'pdf' | 'wa' | 'preview' | 'convert' | null>(null);
   const loadedOnce = useRef(false);
 
   const autosave = useAutosave<BillrDocument>(async (patch) => {
@@ -61,6 +61,9 @@ export default function InvoiceEditor() {
   }
 
   const totals = computeTotals({ ...doc, lines });
+  const isInvoice = doc.type === 'invoice';
+  const isQuote = doc.type === 'quote';
+  const label = DOC_LABEL[doc.type].toLowerCase();
   const status: SaveStatus = autosave.status === 'error' || lineStatus === 'error' ? 'error' : autosave.status === 'saving' || lineStatus === 'saving' ? 'saving' : autosave.status === 'saved' || lineStatus === 'saved' ? 'saved' : 'idle';
   const money = (k: number) => formatMoney(k, doc.currency);
   const discountError =
@@ -81,7 +84,7 @@ export default function InvoiceEditor() {
 
   function readyToSend(): boolean {
     if (!lines.some((l) => l.description.trim() && l.unitPriceKobo > 0)) {
-      Alert.alert('Add an item first', 'An invoice needs at least one item with a price.');
+      Alert.alert('Add an item first', `A ${label} needs at least one item with a price.`);
       return false;
     }
     return true;
@@ -95,7 +98,7 @@ export default function InvoiceEditor() {
       const ok = await sharePdf({ doc, lines, business, client });
       if (ok) {
         await markSent(db, doc.id);
-        setDoc({ ...doc, status: doc.status === 'draft' ? 'sent' : doc.status });
+        setDoc({ ...doc, status: doc.status === 'draft' ? 'sent' : doc.status, sentAt: doc.sentAt ?? 'now' });
       } else {
         Alert.alert('Sharing is not available on this phone');
       }
@@ -118,7 +121,7 @@ export default function InvoiceEditor() {
       const ok = await openWhatsApp(client.phone, whatsAppMessage({ doc, business, client }, totals.totalKobo));
       if (ok) {
         await markSent(db, doc.id);
-        setDoc({ ...doc, status: doc.status === 'draft' ? 'sent' : doc.status });
+        setDoc({ ...doc, status: doc.status === 'draft' ? 'sent' : doc.status, sentAt: doc.sentAt ?? 'now' });
       } else {
         Alert.alert('WhatsApp did not open', 'Check that WhatsApp is installed, or use Share PDF.');
       }
@@ -154,6 +157,24 @@ export default function InvoiceEditor() {
     ]);
   }
 
+  // The client's answer to a quote or proforma. "No reply yet" goes back to sent, or draft if it was never shared.
+  function setAnswer(answer: 'none' | 'accepted' | 'declined') {
+    set({ status: answer === 'none' ? (doc!.sentAt ? 'sent' : 'draft') : answer });
+  }
+
+  async function convert(type: DocType) {
+    if (!readyToSend() || busy) return;
+    setBusy('convert');
+    try {
+      await autosave.flush();
+      const newId = await convertDocument(db, doc!.id, type);
+      router.replace(`/invoice/${newId}`);
+    } catch (e) {
+      Alert.alert('Could not convert', String(e));
+      setBusy(null);
+    }
+  }
+
   function markPaid() {
     set({ status: doc!.status === 'paid' ? 'sent' : 'paid' });
   }
@@ -172,6 +193,30 @@ export default function InvoiceEditor() {
         }}
       />
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
+        {!isInvoice ? (
+          <Card style={{ marginTop: space.md, padding: space.lg, gap: space.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <T style={{ fontFamily: font.semibold }}>{DOC_LABEL[doc.type]}</T>
+              <StatusPill status={pillFor(doc)} />
+            </View>
+            {doc.status === 'converted' ? (
+              <T variant="sub">Already turned into the next document. Find it under {doc.type === 'quote' ? 'Quotes or Home' : 'Home'}.</T>
+            ) : (
+              <>
+                <T variant="sub">Did the client say yes?</T>
+                <Segmented
+                  options={[
+                    { value: 'none', label: 'No reply' },
+                    { value: 'accepted', label: 'Accepted' },
+                    { value: 'declined', label: 'Declined' },
+                  ]}
+                  value={doc.status === 'accepted' || doc.status === 'declined' ? doc.status : 'none'}
+                  onChange={setAnswer}
+                />
+              </>
+            )}
+          </Card>
+        ) : null}
         <Card style={{ marginTop: space.md, padding: space.lg, flexDirection: 'row', gap: space.lg }}>
           <View style={{ flex: 1 }}>
             <DayPicker
@@ -182,15 +227,15 @@ export default function InvoiceEditor() {
           </View>
           <View style={{ flex: 1 }}>
             <DayPicker
-              label="Due date"
+              label={isQuote ? 'Valid until' : 'Due date'}
               value={doc.dueDate}
-              display={doc.termsDays === 0 ? 'On receipt' : undefined}
+              display={doc.termsDays === 0 && !isQuote ? 'On receipt' : undefined}
               onChange={(d) => set({ dueDate: d, termsDays: null })}
             />
           </View>
         </Card>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: space.sm }} accessibilityLabel="Payment terms">
-          {PAYMENT_TERMS.map((t) => (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: space.sm }} accessibilityLabel={isQuote ? 'Valid for' : 'Payment terms'}>
+          {(isQuote ? QUOTE_VALIDITY : PAYMENT_TERMS).map((t) => (
             <Chip key={t.days} label={t.label} on={doc.termsDays === t.days} onPress={() => set({ termsDays: t.days, dueDate: addDays(doc.issueDate, t.days) })} />
           ))}
         </ScrollView>
@@ -318,8 +363,14 @@ export default function InvoiceEditor() {
         <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.xl }}>
           <Button kind="secondary" label="Send on WhatsApp" onPress={whatsAppNow} busy={busy === 'wa'} />
         </View>
+        {!isInvoice && doc.status !== 'converted' ? (
+          <View style={{ gap: space.sm, marginTop: space.sm }}>
+            <Button label="Convert to invoice" onPress={() => convert('invoice')} busy={busy === 'convert'} style={{ flex: 0 }} />
+            {isQuote ? <Button kind="secondary" label="Make proforma" onPress={() => convert('proforma')} disabled={busy === 'convert'} style={{ flex: 0 }} /> : null}
+          </View>
+        ) : null}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: space.md }}>
-          {doc.status !== 'draft' ? <LinkButton label={doc.status === 'paid' ? 'Mark as unpaid' : 'Mark as paid'} onPress={markPaid} /> : <View />}
+          {isInvoice && doc.status !== 'draft' ? <LinkButton label={doc.status === 'paid' ? 'Mark as unpaid' : 'Mark as paid'} onPress={markPaid} /> : <View />}
           <LinkButton label="Delete" danger onPress={remove} />
         </View>
       </ScrollView>

@@ -34,7 +34,9 @@ export type Item = {
 };
 
 export type DocType = 'invoice' | 'quote' | 'proforma';
-export type DocStatus = 'draft' | 'sent' | 'paid';
+// Invoices go draft -> sent -> paid. Quotes and proformas go draft -> sent, then the client's answer
+// (accepted or declined), and converted once turned into the next document.
+export type DocStatus = 'draft' | 'sent' | 'paid' | 'accepted' | 'declined' | 'converted';
 
 export type DocumentLine = {
   id: number;
@@ -61,6 +63,7 @@ export type BillrDocument = {
   notes: string;
   status: DocStatus;
   totalKobo: number;
+  sentAt: string | null;
   createdAt: string;
   updatedAt: string;
 };

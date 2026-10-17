@@ -44,10 +44,15 @@ export function toWhatsAppNumber(phone: string): string | null {
   return digits.length >= 10 ? digits : null;
 }
 
+function dueText(doc: InvoiceHtmlInput['doc']): string {
+  if (doc.type === 'quote') return `, valid until ${formatDay(doc.dueDate)}`;
+  return doc.termsDays === 0 ? ', due on receipt' : `, due ${formatDay(doc.dueDate)}`;
+}
+
 export function whatsAppMessage({ doc, business, client }: Pick<InvoiceHtmlInput, 'doc' | 'business' | 'client'>, totalKobo: number): string {
   const parts = [
     `Hello${client?.name ? ' ' + client.name.split(' ')[0] : ''},`,
-    `here is ${DOC_LABEL[doc.type].toLowerCase()} ${doc.number} from ${business.name} for ${formatMoney(totalKobo, doc.currency, { decimals: true })}${doc.termsDays === 0 ? ', due on receipt' : `, due ${formatDay(doc.dueDate)}`}.`,
+    `here is ${DOC_LABEL[doc.type].toLowerCase()} ${doc.number} from ${business.name} for ${formatMoney(totalKobo, doc.currency, { decimals: true })}${dueText(doc)}.`,
   ];
   if (business.paymentAccountNumber) {
     parts.push('', 'Pay by transfer:', business.paymentBankName, business.paymentAccountNumber, business.paymentAccountName);
@@ -65,4 +70,15 @@ export async function openWhatsApp(phone: string, message: string): Promise<bool
   } catch {
     return false;
   }
+}
+
+// Saves a spreadsheet file in our cache folder and opens the share sheet (email, WhatsApp, Drive).
+export async function shareCsv(fileName: string, csv: string): Promise<boolean> {
+  if (!(await Sharing.isAvailableAsync())) return false;
+  const file = new File(Paths.cache, fileName);
+  if (file.exists) file.delete();
+  file.create();
+  file.write(csv);
+  await Sharing.shareAsync(file.uri, { mimeType: 'text/csv', UTI: 'public.comma-separated-values-text', dialogTitle: fileName });
+  return true;
 }

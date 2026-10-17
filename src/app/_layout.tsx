@@ -44,9 +44,9 @@ export default function RootLayout() {
               contentStyle: { backgroundColor: color.paper },
             }}
           >
-            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="welcome" options={{ headerShown: false }} />
             <Stack.Screen name="setup" options={{ title: 'Your business' }} />
-            <Stack.Screen name="clients" options={{ title: 'Clients' }} />
             <Stack.Screen name="client/[id]" options={{ title: 'Client' }} />
             <Stack.Screen name="items" options={{ title: 'Items' }} />
             <Stack.Screen name="item/[id]" options={{ title: 'Item' }} />

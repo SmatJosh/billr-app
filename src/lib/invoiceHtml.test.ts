@@ -37,6 +37,7 @@ const doc: BillrDocument = {
   notes: 'Balance on pickup',
   status: 'draft',
   totalKobo: 0,
+  sentAt: null,
   createdAt: '',
   updatedAt: '',
 };
@@ -64,4 +65,12 @@ test('escapes client text', () => {
 test('on-receipt terms show instead of a date', () => {
   const html = renderInvoiceHtml({ doc: { ...doc, termsDays: 0 }, lines, business, client });
   assert.match(html, /On receipt/);
+});
+
+test('a quote says valid until, never on receipt', () => {
+  const html = renderInvoiceHtml({ doc: { ...doc, type: 'quote', number: 'QUO-0001', termsDays: 0 }, lines, business, client });
+  assert.match(html, />Quote</);
+  assert.match(html, /Valid until/);
+  assert.match(html, /22 Oct 2026/);
+  assert.doesNotMatch(html, /On receipt/);
 });
