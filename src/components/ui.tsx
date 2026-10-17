@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { color, font, radius, space, TOUCH } from '../theme';
 import type { DocStatus, DocType } from '../lib/types';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Icon } from './icons';
 import { today } from '../lib/dates';
 
@@ -144,17 +145,48 @@ export function Chip({ label, on, onPress }: { label: string; on?: boolean; onPr
 }
 
 // Filter chips in one line that scrolls sideways past the screen edge, instead of wrapping onto a second line.
+// A fade at the cut edge shows there is more to swipe to; it goes away once the end is in view.
 export function ChipRow({ children, label }: { children: ReactNode; label?: string }) {
+  const [boxW, setBoxW] = useState(0);
+  const [contentW, setContentW] = useState(0);
+  const [x, setX] = useState(0);
+  const moreRight = contentW - boxW - x > 4;
+  const moreLeft = x > 4;
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      accessibilityLabel={label}
-      style={{ marginHorizontal: -space.lg, flexGrow: 0 }}
-      contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.lg }}
-    >
-      {children}
-    </ScrollView>
+    <View style={{ marginHorizontal: -space.lg }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        accessibilityLabel={label}
+        style={{ flexGrow: 0 }}
+        contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.lg }}
+        onLayout={(e) => setBoxW(e.nativeEvent.layout.width)}
+        onContentSizeChange={(w) => setContentW(w)}
+        onScroll={(e) => setX(e.nativeEvent.contentOffset.x)}
+        scrollEventThrottle={32}
+      >
+        {children}
+      </ScrollView>
+      {moreLeft ? <EdgeFade side="left" /> : null}
+      {moreRight ? <EdgeFade side="right" /> : null}
+    </View>
+  );
+}
+
+function EdgeFade({ side }: { side: 'left' | 'right' }) {
+  const id = `fade-${side}`;
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, width: 48, [side]: 0 }}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id={id} x1={side === 'right' ? '0' : '1'} y1="0" x2={side === 'right' ? '1' : '0'} y2="0">
+            <Stop offset="0" stopColor={color.paper} stopOpacity={0} />
+            <Stop offset="1" stopColor={color.paper} stopOpacity={1} />
+          </LinearGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill={`url(#${id})`} />
+      </Svg>
+    </View>
   );
 }
 
@@ -335,7 +367,7 @@ export const styles = StyleSheet.create({
     color: color.tx,
   },
   help: { fontFamily: font.regular, fontSize: 13, color: color.tx3 },
-  chip: { height: 40, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: color.edge, backgroundColor: color.surface, justifyContent: 'center' },
+  chip: { height: 40, paddingHorizontal: 16, borderRadius: radius.pill, borderWidth: 1, borderColor: color.edge, backgroundColor: color.surface, justifyContent: 'center' },
   seg: { flexDirection: 'row', borderWidth: 1, borderColor: color.edge, borderRadius: radius.pill, overflow: 'hidden', backgroundColor: color.surface },
   segBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
 });
