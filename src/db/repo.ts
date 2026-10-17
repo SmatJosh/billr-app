@@ -236,7 +236,7 @@ function toLine(r: Row): DocumentLine {
 // Money received so far on the document d.
 const PAID_SQL = '(SELECT COALESCE(SUM(p.amount_kobo), 0) FROM payments p WHERE p.document_id = d.id)';
 
-export type DocListRow = BillrDocument & { clientName: string | null; paidKobo: number; payments: Pick<Payment, 'amountKobo' | 'paidOn'>[] };
+export type DocListRow = BillrDocument & { clientName: string | null; paidKobo: number; payments: Pick<Payment, 'amountKobo' | 'paidOn' | 'method' | 'note'>[] };
 
 export async function listDocuments(db: SQLiteDatabase, businessId: number): Promise<DocListRow[]> {
   const rows = await db.getAllAsync<Row>(
@@ -245,14 +245,14 @@ export async function listDocuments(db: SQLiteDatabase, businessId: number): Pro
     [businessId],
   );
   const pays = await db.getAllAsync<Row>(
-    `SELECT p.document_id, p.amount_kobo, p.paid_on FROM payments p JOIN documents d ON d.id = p.document_id
+    `SELECT p.document_id, p.amount_kobo, p.paid_on, p.method, p.note FROM payments p JOIN documents d ON d.id = p.document_id
      WHERE d.business_id = ? ORDER BY p.paid_on, p.id`,
     [businessId],
   );
-  const byDoc = new Map<number, { amountKobo: number; paidOn: string }[]>();
+  const byDoc = new Map<number, DocListRow['payments']>();
   for (const p of pays) {
     const list = byDoc.get(p.document_id) ?? [];
-    list.push({ amountKobo: p.amount_kobo, paidOn: p.paid_on });
+    list.push({ amountKobo: p.amount_kobo, paidOn: p.paid_on, method: p.method, note: p.note });
     byDoc.set(p.document_id, list);
   }
   return rows.map((r) => {

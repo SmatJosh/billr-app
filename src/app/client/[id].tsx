@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { deleteClient, getClient, updateClient } from '../../db/repo';
+import { deleteClient, ensureBusiness, getClient, listDocuments, updateClient } from '../../db/repo';
+import { buildStatement, statementCurrencies } from '../../lib/statement';
+import { formatMoney } from '../../lib/format';
 import type { Client } from '../../lib/types';
 import { useAutosave } from '../../lib/useAutosave';
-import { Button, Field, LinkButton, SaveState } from '../../components/ui';
-import { space } from '../../theme';
+import { Button, Card, Field, LinkButton, SaveState, T } from '../../components/ui';
+import { color, space } from '../../theme';
 
 export default function ClientScreen() {
   const db = useSQLiteContext();
@@ -16,9 +18,29 @@ export default function ClientScreen() {
     if (c) await updateClient(db, c.id, patch);
   });
 
+  const [summary, setSummary] = useState<{ owed: string; detail: string } | null>(null);
+
   useEffect(() => {
     getClient(db, Number(id)).then(setC);
   }, [db, id]);
+
+  // What they owe, refreshed when coming back from the statement or an invoice.
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const b = await ensureBusiness(db);
+        const docs = (await listDocuments(db, b.id)).filter((d) => d.clientId === Number(id));
+        const currency = statementCurrencies(docs)[0];
+        if (!currency) return setSummary(null);
+        const s = buildStatement(docs, currency, null);
+        const count = s.entries.filter((e) => e.kind === 'invoice').length;
+        setSummary({
+          owed: s.closingKobo > 0 ? formatMoney(s.closingKobo, currency) : 'All paid up',
+          detail: `${count} ${count === 1 ? 'invoice' : 'invoices'} · ${formatMoney(s.paidKobo, currency)} paid`,
+        });
+      })();
+    }, [db, id]),
+  );
 
   if (!c) return null;
 
@@ -54,6 +76,16 @@ export default function ClientScreen() {
         }}
       />
       <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
+        {summary ? (
+          <Card style={{ padding: space.lg, gap: space.sm }}>
+            <T variant="label">OWES YOU</T>
+            <T variant="display" style={summary.owed === 'All paid up' ? { color: color.paidTx } : undefined}>{summary.owed}</T>
+            <T variant="sub">{summary.detail}</T>
+            <View style={{ flexDirection: 'row', marginTop: space.sm }}>
+              <Button kind="secondary" label="View statement" onPress={() => router.push(`/client/statement?id=${c.id}`)} />
+            </View>
+          </Card>
+        ) : null}
         <Field label="Name" value={c.name} onChangeText={(v) => set('name', v)} autoCapitalize="words" autoFocus={!c.name} />
         <Field label="Phone" value={c.phone} onChangeText={(v) => set('phone', v)} keyboardType="phone-pad" mono help="Used to send on WhatsApp" />
         <Field label="Email (optional)" value={c.email} onChangeText={(v) => set('email', v)} keyboardType="email-address" autoCapitalize="none" />
