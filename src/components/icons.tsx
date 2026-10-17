@@ -2,7 +2,7 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { color } from '../theme';
 
 // Line icons from the design canvas: 24 px box, 1.75 stroke, round ends.
-export type IconName = 'bank' | 'whatsapp' | 'home' | 'quotes' | 'clients' | 'reports' | 'more' | 'download' | 'chevron' | 'business' | 'items' | 'cloud' | 'info';
+export type IconName = 'bank' | 'whatsapp' | 'home' | 'quotes' | 'clients' | 'reports' | 'more' | 'download' | 'chevron' | 'business' | 'items' | 'cloud' | 'info' | 'close';
 
 export function Icon({ name, size = 24, tint = color.tx }: { name: IconName; size?: number; tint?: string }) {
   const p = { stroke: tint, strokeWidth: 1.75, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' };
@@ -52,6 +52,7 @@ export function Icon({ name, size = 24, tint = color.tx }: { name: IconName; siz
           <Path {...p} d="M12 11v5M12 8h.01" />
         </>
       ) : null}
+      {name === 'close' ? <Path {...p} d="M6 6l12 12M18 6L6 18" /> : null}
       {name === 'cloud' ? <Path {...p} d="M20 11a8 8 0 0 0-14.7-4.3L3 9M4 13a8 8 0 0 0 14.7 4.3L21 15M3 4v5h5M21 20v-5h-5" /> : null}
     </Svg>
   );

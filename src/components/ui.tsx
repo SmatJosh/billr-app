@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { color, font, radius, space, TOUCH } from '../theme';
 import type { DocStatus, DocType } from '../lib/types';
+import { router } from 'expo-router';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Icon } from './icons';
 import { today } from '../lib/dates';
@@ -340,6 +341,33 @@ export function BottomSheet({ open, onClose, title, children, doneLabel = 'Got i
         </Animated.View>
       </View>
     </Modal>
+  );
+}
+
+// A whole route shown as a sheet sliding up over the screen it came from: the picker routes use it so the
+// invoice stays in view behind. Tapping the dimmed part or Back closes it like any other screen.
+export function SheetScreen({ title, children }: { title: string; children: ReactNode }) {
+  const y = useRef(new Animated.Value(600)).current;
+  useEffect(() => {
+    Animated.timing(y, { toValue: 0, duration: 260, useNativeDriver: true }).start();
+  }, [y]);
+  return (
+    <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+      <Pressable accessibilityLabel="Close sheet" onPress={() => router.back()} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,18,15,0.45)' }} />
+      <Animated.View
+        style={{ transform: [{ translateY: y }], maxHeight: '88%', backgroundColor: color.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: space.sm, overflow: 'hidden' }}
+      >
+        <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: color.edge, marginBottom: space.md }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: space.lg, paddingRight: space.sm }}>
+          <Text style={[styles.display, { fontSize: 30, lineHeight: 36, flex: 1 }]} accessibilityRole="header">{title}</Text>
+          {/* Not everyone knows to tap outside or press Back, so closing is also a visible button. */}
+          <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? color.hover : color.surface, borderWidth: 1, borderColor: color.edge })}>
+            <Icon name="close" size={20} tint={color.tx} />
+          </Pressable>
+        </View>
+        {children}
+      </Animated.View>
+    </View>
   );
 }
 

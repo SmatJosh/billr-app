@@ -51,8 +51,8 @@ export default function RootLayout() {
             <Stack.Screen name="items" options={{ title: 'Items' }} />
             <Stack.Screen name="item/[id]" options={{ title: 'Item' }} />
             <Stack.Screen name="invoice/[id]" options={{ title: 'Invoice' }} />
-            <Stack.Screen name="invoice/pick-client" options={{ title: 'Bill to', presentation: 'modal' }} />
-            <Stack.Screen name="invoice/pick-item" options={{ title: 'Add item', presentation: 'modal' }} />
+            <Stack.Screen name="invoice/pick-client" options={SHEET} />
+            <Stack.Screen name="invoice/pick-item" options={SHEET} />
             <Stack.Screen name="sign-in" options={{ title: '' }} />
           </Stack>
         </SyncProvider>
@@ -60,3 +60,6 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+// The pickers draw their own sheet (SheetScreen) over the invoice, so the screen itself is see-through.
+const SHEET = { presentation: 'transparentModal', animation: 'fade', headerShown: false, contentStyle: { backgroundColor: 'transparent' } } as const;

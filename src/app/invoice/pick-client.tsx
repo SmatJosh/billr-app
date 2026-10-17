@@ -5,8 +5,8 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { createClient, ensureBusiness, listClients, updateClient, updateDocument } from '../../db/repo';
 import type { Client } from '../../lib/types';
 import { initials } from '../../lib/format';
-import { Avatar, Button, Card, Field, Row, T } from '../../components/ui';
-import { space } from '../../theme';
+import { Avatar, Button, Card, Field, Row, SheetScreen, T } from '../../components/ui';
+import { font, space } from '../../theme';
 
 export default function PickClient() {
   const db = useSQLiteContext();
@@ -50,31 +50,34 @@ export default function PickClient() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FlatList
-        data={shown}
-        keyExtractor={(c) => String(c.id)}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: space.lg, gap: space.sm, paddingBottom: 48 }}
-        ListHeaderComponent={
-          <View style={{ gap: space.md, marginBottom: space.sm }}>
-            <Field label="Client name" value={query} onChangeText={setQuery} placeholder="Search or type a new name" autoCapitalize="words" autoFocus={clients.length === 0} />
-            {q && !exact ? (
-              <Card style={{ padding: space.lg, gap: space.md }}>
-                <T style={{ fontWeight: '600' }}>New client: {query.trim()}</T>
-                <Field label="Phone (optional)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" mono help="Needed to send on WhatsApp" />
-                <View style={{ flexDirection: 'row' }}>
-                  <Button label="Add and use" onPress={addAndPick} busy={busy} />
-                </View>
-              </Card>
-            ) : null}
-          </View>
-        }
-        renderItem={({ item: c }) => (
-          <Card>
-            <Row title={c.name} subtitle={c.phone || undefined} mono left={<Avatar text={initials(c.name)} />} onPress={() => pick(c.id)} />
-          </Card>
-        )}
-      />
+      <SheetScreen title="Bill to">
+        <FlatList
+          data={shown}
+          keyExtractor={(c) => String(c.id)}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: space.lg, gap: space.sm, paddingBottom: 48 }}
+          style={{ flexGrow: 0 }}
+          ListHeaderComponent={
+            <View style={{ gap: space.md, marginBottom: space.sm }}>
+              <Field label="Client name" value={query} onChangeText={setQuery} placeholder="Search or type a new name" autoCapitalize="words" autoFocus={clients.length === 0} />
+              {q && !exact ? (
+                <Card style={{ padding: space.lg, gap: space.md }}>
+                  <T style={{ fontFamily: font.semibold }}>New client: {query.trim()}</T>
+                  <Field label="Phone (optional)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" mono help="Needed to send on WhatsApp" />
+                  <View style={{ flexDirection: 'row' }}>
+                    <Button label="Add and use" onPress={addAndPick} busy={busy} />
+                  </View>
+                </Card>
+              ) : null}
+            </View>
+          }
+          renderItem={({ item: c }) => (
+            <Card>
+              <Row title={c.name} subtitle={c.phone || undefined} mono left={<Avatar text={initials(c.name)} />} onPress={() => pick(c.id)} />
+            </Card>
+          )}
+        />
+      </SheetScreen>
     </KeyboardAvoidingView>
   );
 }
