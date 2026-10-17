@@ -44,8 +44,8 @@ function TabBar({ state, navigation, insets }: BottomTabBarProps) {
             }}
             style={{ flex: 1, height: 72, alignItems: 'center', justifyContent: 'center', gap: 4 }}
           >
-            <View style={{ width: 56, height: 32, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? color.accentSoft : 'transparent' }}>
-              <Icon name={tab.icon} tint={on ? color.accentOnSoft : color.tx2} />
+            <View style={{ width: 60, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? color.accentTint : 'transparent' }}>
+              <Icon name={tab.icon} tint={on ? color.ink : color.tx2} />
             </View>
             <Text style={{ fontSize: 12, fontFamily: on ? font.semibold : font.medium, color: on ? color.tx : color.tx2 }}>{tab.title}</Text>
           </Pressable>

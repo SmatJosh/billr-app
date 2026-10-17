@@ -51,7 +51,9 @@ export default function More() {
 
       <T variant="section">Your business</T>
       <Card>
-        <MenuRow icon="business" title="Business profile and payment details" value={bank} onPress={() => router.push('/setup')} />
+        <MenuRow icon="business" title="Business profile" onPress={() => router.push('/setup')} />
+        <Divider />
+        <MenuRow icon="bank" title="Payment details" value={bank} onPress={() => router.push('/setup')} />
         <Divider />
         <MenuRow icon="items" title="Items" value={itemCount ? `${itemCount} saved` : undefined} onPress={() => router.push('/items')} />
       </Card>
@@ -72,7 +74,7 @@ function MenuRow({ icon, title, value, onPress }: { icon: IconName; title: strin
       style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, minHeight: 56, paddingVertical: 12, backgroundColor: pressed ? color.hover : 'transparent', borderRadius: radius.card })}
     >
       <Icon name={icon} />
-      <T style={{ flex: 1 }} numberOfLines={2}>{title}</T>
+      <T style={{ flex: 1 }} numberOfLines={1}>{title}</T>
       {value ? <T variant="sub" style={{ fontFamily: font.mono }}>{value}</T> : null}
       <Icon name="chevron" size={20} tint={color.tx3} />
     </Pressable>

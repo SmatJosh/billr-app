@@ -16,6 +16,9 @@ export const color = {
   accent: '#985700',
   accentSoft: '#F9D77E',
   accentOnSoft: '#1C1915',
+  accentTint: '#FCEFC9',
+  // WhatsApp's green, darkened so white text on it is readable (5:1).
+  whatsapp: '#178043',
   paidBg: '#E3F3EA',
   paidTx: '#17633D',
   dueBg: '#FCE9E7',

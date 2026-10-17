@@ -10,7 +10,7 @@ import { addDays, PAYMENT_TERMS, QUOTE_VALIDITY } from '../../lib/dates';
 import { formatMoney, formatQuantity, initials, koboToInput } from '../../lib/format';
 import { useAutosave, type SaveStatus } from '../../lib/useAutosave';
 import { openWhatsApp, previewDocument, sharePdf, whatsAppMessage } from '../../lib/share';
-import { Avatar, Button, Card, Chip, Divider, Field, LinkButton, pillFor, Row, SaveState, Segmented, StatusPill, T, styles as ui } from '../../components/ui';
+import { Avatar, Button, Card, Chip, ChipRow, Divider, Field, LinkButton, pillFor, Row, SaveState, Segmented, StatusPill, T, WhatsAppButton, styles as ui } from '../../components/ui';
 import { DayPicker } from '../../components/DayPicker';
 import { LineEditor } from '../../components/LineEditor';
 import { color, font, space } from '../../theme';
@@ -63,6 +63,7 @@ export default function InvoiceEditor() {
   const totals = computeTotals({ ...doc, lines });
   const isInvoice = doc.type === 'invoice';
   const isQuote = doc.type === 'quote';
+  const readyToConvert = !isInvoice && doc.status === 'accepted';
   const label = DOC_LABEL[doc.type].toLowerCase();
   const status: SaveStatus = autosave.status === 'error' || lineStatus === 'error' ? 'error' : autosave.status === 'saving' || lineStatus === 'saving' ? 'saving' : autosave.status === 'saved' || lineStatus === 'saved' ? 'saved' : 'idle';
   const money = (k: number) => formatMoney(k, doc.currency);
@@ -175,8 +176,9 @@ export default function InvoiceEditor() {
     }
   }
 
-  function markPaid() {
-    set({ status: doc!.status === 'paid' ? 'sent' : 'paid' });
+  // "Not yet" goes back to sent, or draft if the invoice was never shared.
+  function setPaid(paid: boolean) {
+    set({ status: paid ? 'paid' : doc!.sentAt ? 'sent' : 'draft' });
   }
 
   return (
@@ -193,17 +195,34 @@ export default function InvoiceEditor() {
         }}
       />
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
-        {!isInvoice ? (
-          <Card style={{ marginTop: space.md, padding: space.lg, gap: space.md }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <T style={{ fontFamily: font.semibold }}>{DOC_LABEL[doc.type]}</T>
-              <StatusPill status={pillFor(doc)} />
-            </View>
-            {doc.status === 'converted' ? (
+        <Card style={{ marginTop: space.md, padding: space.lg, gap: space.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <T style={{ fontFamily: font.semibold }}>{DOC_LABEL[doc.type]}</T>
+            <StatusPill status={pillFor(doc)} />
+          </View>
+          {isInvoice ? (
+            <>
+              <T variant="sub">Has the client paid?</T>
+              <Segmented
+                options={[
+                  { value: 'no', label: 'Not yet' },
+                  { value: 'yes', label: 'Paid' },
+                ]}
+                value={doc.status === 'paid' ? 'yes' : 'no'}
+                onChange={(v) => setPaid(v === 'yes')}
+              />
+            </>
+          ) : doc.status === 'converted' ? (
               <T variant="sub">Already turned into the next document. Find it under {doc.type === 'quote' ? 'Quotes or Home' : 'Home'}.</T>
             ) : (
               <>
-                <T variant="sub">Did the client say yes?</T>
+                <T variant="sub">
+                  {doc.status !== 'accepted'
+                    ? 'When the client says yes, tap Accepted to turn it into an invoice.'
+                    : isQuote
+                      ? 'Scroll down to turn it into an invoice or proforma.'
+                      : 'Scroll down to turn it into an invoice.'}
+                </T>
                 <Segmented
                   options={[
                     { value: 'none', label: 'No reply' },
@@ -215,8 +234,7 @@ export default function InvoiceEditor() {
                 />
               </>
             )}
-          </Card>
-        ) : null}
+        </Card>
         <Card style={{ marginTop: space.md, padding: space.lg, flexDirection: 'row', gap: space.lg }}>
           <View style={{ flex: 1 }}>
             <DayPicker
@@ -234,11 +252,13 @@ export default function InvoiceEditor() {
             />
           </View>
         </Card>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: space.sm }} accessibilityLabel={isQuote ? 'Valid for' : 'Payment terms'}>
-          {(isQuote ? QUOTE_VALIDITY : PAYMENT_TERMS).map((t) => (
-            <Chip key={t.days} label={t.label} on={doc.termsDays === t.days} onPress={() => set({ termsDays: t.days, dueDate: addDays(doc.issueDate, t.days) })} />
-          ))}
-        </ScrollView>
+        <View style={{ marginTop: space.sm }}>
+          <ChipRow label={isQuote ? 'Valid for' : 'Payment terms'}>
+            {(isQuote ? QUOTE_VALIDITY : PAYMENT_TERMS).map((t) => (
+              <Chip key={t.days} label={t.label} on={doc.termsDays === t.days} onPress={() => set({ termsDays: t.days, dueDate: addDays(doc.issueDate, t.days) })} />
+            ))}
+          </ChipRow>
+        </View>
 
         <T variant="section">Bill to</T>
         <Card>
@@ -348,8 +368,12 @@ export default function InvoiceEditor() {
         <T variant="section">Pay by transfer</T>
         <Card>
           <Row
-            title={business.paymentBankName || 'Add your bank details'}
-            subtitle={business.paymentAccountNumber ? `${business.paymentAccountNumber} · ${business.paymentAccountName}` : 'So clients know where to pay'}
+            title={business.paymentBankName || (business.paymentAccountNumber ? 'Add your bank name' : 'Add your bank details')}
+            subtitle={
+              business.paymentAccountNumber
+                ? [business.paymentAccountNumber, business.paymentAccountName].filter((x) => x.trim()).join(' · ')
+                : 'So clients know where to pay'
+            }
             mono={!!business.paymentAccountNumber}
             right={<Text style={{ fontFamily: font.medium, fontSize: 14, color: color.tx }}>Edit</Text>}
             onPress={() => go('/setup')}
@@ -360,17 +384,19 @@ export default function InvoiceEditor() {
           <Field label="Notes and terms" value={doc.notes} onChangeText={(v) => set({ notes: v })} multiline placeholder="e.g. Balance on pickup" />
         </View>
 
-        <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.xl }}>
-          <Button kind="secondary" label="Send on WhatsApp" onPress={whatsAppNow} busy={busy === 'wa'} />
-        </View>
-        {!isInvoice && doc.status !== 'converted' ? (
-          <View style={{ gap: space.sm, marginTop: space.sm }}>
+        {/* One main action per stage: send it, then once a quote is accepted, turn it into the next document. */}
+        {readyToConvert ? (
+          <View style={{ gap: space.sm, marginTop: space.xl }}>
             <Button label="Convert to invoice" onPress={() => convert('invoice')} busy={busy === 'convert'} style={{ flex: 0 }} />
             {isQuote ? <Button kind="secondary" label="Make proforma" onPress={() => convert('proforma')} disabled={busy === 'convert'} style={{ flex: 0 }} /> : null}
           </View>
-        ) : null}
+        ) : (
+          <View style={{ marginTop: space.xl }}>
+            <WhatsAppButton onPress={whatsAppNow} busy={busy === 'wa'} />
+          </View>
+        )}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: space.md }}>
-          {isInvoice && doc.status !== 'draft' ? <LinkButton label={doc.status === 'paid' ? 'Mark as unpaid' : 'Mark as paid'} onPress={markPaid} /> : <View />}
+          <View />
           <LinkButton label="Delete" danger onPress={remove} />
         </View>
       </ScrollView>

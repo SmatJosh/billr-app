@@ -2,14 +2,14 @@ import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import type { DocListRow } from '../db/repo';
 import { formatMoney, initials } from '../lib/format';
-import { formatDay, formatDayShort } from '../lib/dates';
+import { formatDayShort } from '../lib/dates';
 import { Avatar, Card, pillFor, StatusPill, T } from './ui';
 import { font, space } from '../theme';
 
 function detail(d: DocListRow): string {
-  if (d.type === 'invoice') return d.termsDays === 0 && d.status !== 'paid' ? 'due on receipt' : `due ${formatDay(d.dueDate)}`;
+  if (d.type === 'invoice') return d.termsDays === 0 && d.status !== 'paid' ? 'due on receipt' : `due ${formatDayShort(d.dueDate)}`;
   // The number already says QUO or PRO; spell out proforma, which fewer people know by its prefix.
-  if (d.type === 'quote') return d.status === 'converted' ? 'quote' : `valid until ${formatDayShort(d.dueDate)}`;
+  if (d.type === 'quote') return d.status === 'converted' ? 'quote' : `until ${formatDayShort(d.dueDate)}`;
   return d.status === 'converted' ? 'proforma' : `proforma · due ${formatDayShort(d.dueDate)}`;
 }
 
@@ -21,7 +21,7 @@ export function DocRow({ d }: { d: DocListRow }) {
         <Avatar text={initials(d.clientName ?? '')} />
         <View style={{ flex: 1 }}>
           <T style={{ fontFamily: font.semibold }} numberOfLines={1}>{d.clientName || 'No client yet'}</T>
-          <T variant="sub" numberOfLines={2}>
+          <T variant="sub" numberOfLines={1}>
             <Text style={{ fontFamily: font.mono }}>{d.number}</Text> · {detail(d)}
           </T>
         </View>

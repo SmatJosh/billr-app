@@ -7,11 +7,11 @@ import { createDocument, ensureBusiness, listDocuments, type DocListRow } from '
 import type { Business } from '../../lib/types';
 import { formatMoney } from '../../lib/format';
 import { quoteSummary } from '../../lib/reports';
-import { Card, Chip, Empty, Fab, ScreenTitle, T } from '../../components/ui';
+import { Card, Chip, ChipRow, Empty, Fab, ScreenTitle, T } from '../../components/ui';
 import { DocRow } from '../../components/DocRow';
 import { color, space } from '../../theme';
 
-type Filter = 'all' | 'quote' | 'proforma' | 'converted';
+type Filter = 'all' | 'quote' | 'proforma' | 'accepted' | 'converted';
 
 export default function Quotes() {
   const db = useSQLiteContext();
@@ -43,7 +43,7 @@ export default function Quotes() {
   const cur = business.defaultCurrency;
   const summary = quoteSummary(docs, cur);
   const shown = docs.filter((d) =>
-    filter === 'all' ? true : filter === 'converted' ? d.status === 'converted' : d.type === filter && d.status !== 'converted',
+    filter === 'all' ? true : filter === 'converted' || filter === 'accepted' ? d.status === filter : d.type === filter && d.status !== 'converted',
   );
 
   async function newQuote() {
@@ -76,11 +76,14 @@ export default function Quotes() {
                 <T variant="display" style={{ fontSize: 30, lineHeight: 36 }} numberOfLines={1} adjustsFontSizeToFit>{formatMoney(summary.wonKobo, cur)}</T>
               </View>
             </Card>
-            <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.lg, marginBottom: space.md, flexWrap: 'wrap' }}>
-              <Chip label="All" on={filter === 'all'} onPress={() => setFilter('all')} />
-              <Chip label="Quotes" on={filter === 'quote'} onPress={() => setFilter('quote')} />
-              <Chip label="Proforma" on={filter === 'proforma'} onPress={() => setFilter('proforma')} />
-              <Chip label="Converted" on={filter === 'converted'} onPress={() => setFilter('converted')} />
+            <View style={{ marginTop: space.lg, marginBottom: space.md }}>
+              <ChipRow label="Show">
+                <Chip label="All" on={filter === 'all'} onPress={() => setFilter('all')} />
+                <Chip label="Quotes" on={filter === 'quote'} onPress={() => setFilter('quote')} />
+                <Chip label="Proforma" on={filter === 'proforma'} onPress={() => setFilter('proforma')} />
+                <Chip label="Accepted" on={filter === 'accepted'} onPress={() => setFilter('accepted')} />
+                <Chip label="Converted" on={filter === 'converted'} onPress={() => setFilter('converted')} />
+              </ChipRow>
             </View>
           </View>
         }

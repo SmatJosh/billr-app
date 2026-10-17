@@ -1,17 +1,16 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ensureBusiness, listDocuments, type DocListRow } from '../../db/repo';
 import type { Business } from '../../lib/types';
 import type { Currency } from '../../lib/format';
-import { formatMoney } from '../../lib/format';
+import { formatMoney, formatMoneyShort } from '../../lib/format';
 import { today } from '../../lib/dates';
 import { currenciesUsed, moneyIn, outstanding, periodLabel, toCsv, type Period } from '../../lib/reports';
 import { shareCsv } from '../../lib/share';
-import { Card, Divider, ScreenTitle, Segmented, T } from '../../components/ui';
-import { Icon } from '../../components/icons';
+import { Button, Card, Divider, ScreenTitle, Segmented, StatTile, T } from '../../components/ui';
 import { color, font, space } from '../../theme';
 
 const CHART_HEIGHT = 96;
@@ -65,14 +64,7 @@ export default function Reports() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: color.paper }} contentContainerStyle={{ paddingTop: insets.top + space.lg, paddingHorizontal: space.lg, paddingBottom: space.xl, gap: space.md }}>
-      <ScreenTitle
-        title="Reports"
-        right={
-          <Pressable accessibilityRole="button" accessibilityLabel="Export a spreadsheet" onPress={exportCsv} hitSlop={8} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="download" />
-          </Pressable>
-        }
-      />
+      <ScreenTitle title="Reports" />
 
       <View style={{ flexDirection: 'row', gap: space.sm }}>
         <View style={{ width: 230 }}>
@@ -96,15 +88,21 @@ export default function Reports() {
         <T variant="label">MONEY IN · {periodLabel(period).toUpperCase()}</T>
         <T variant="display" style={{ fontSize: 44, lineHeight: 52 }} numberOfLines={1} adjustsFontSizeToFit>{money(r.totalKobo)}</T>
         <T variant="sub">
-          {r.previousLabel}: {money(r.previousKobo)}
+          {money(r.previousKobo)} in {r.previousLabel}
         </T>
         <View
           accessible
           accessibilityLabel={`Money in by ${period === 'month' ? 'week' : 'month'}: ${r.bars.map((b) => `${b.label} ${money(b.kobo)}`).join(', ')}`}
-          style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: CHART_HEIGHT + 22, marginTop: space.lg }}
+          style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: CHART_HEIGHT + 40, marginTop: space.lg }}
         >
           {r.bars.map((b, i) => (
             <View key={i} style={{ flex: 1, alignItems: 'center', gap: 6, justifyContent: 'flex-end', height: '100%' }}>
+              {/* Weekly bars are wide enough to carry their amount; twelve monthly bars are not. */}
+              {period === 'month' && b.kobo > 0 ? (
+                <T style={{ fontSize: 11, lineHeight: 14, fontFamily: font.medium, color: color.tx2 }} numberOfLines={1} adjustsFontSizeToFit>
+                  {formatMoneyShort(b.kobo, cur)}
+                </T>
+              ) : null}
               <View
                 style={{
                   width: '100%',
@@ -123,12 +121,21 @@ export default function Reports() {
         {r.totalKobo === 0 ? (
           <T variant="sub" style={{ marginTop: space.sm }}>Invoices you mark as paid show up here.</T>
         ) : null}
+        {/* A sentence, not a third tile: "Same day" or "12 days" doesn't fit a narrow tile on small phones. */}
+        {r.avgDaysToPay !== null ? (
+          <T variant="sub" style={{ marginTop: space.md }}>
+            On average, clients paid{' '}
+            <T variant="sub" style={{ fontFamily: font.semibold, color: color.tx }}>
+              {r.avgDaysToPay === 0 ? 'the same day' : `${r.avgDaysToPay} ${r.avgDaysToPay === 1 ? 'day' : 'days'} after`}
+            </T>{' '}
+            you sent the invoice.
+          </T>
+        ) : null}
       </Card>
 
       <View style={{ flexDirection: 'row', gap: space.sm }}>
-        <Stat label="PENDING" value={money(owed.pendingKobo)} />
-        <Stat label="OVERDUE" value={money(owed.overdueKobo)} danger={owed.overdueKobo > 0} />
-        <Stat label="DAYS TO PAY" value={r.avgDaysToPay === null ? '–' : r.avgDaysToPay === 0 ? 'Same day' : `${r.avgDaysToPay} avg`} />
+        <StatTile dot={color.partTx} label="PENDING" value={formatMoneyShort(owed.pendingKobo, cur)} />
+        <StatTile dot={color.dueTx} label="OVERDUE" value={formatMoneyShort(owed.overdueKobo, cur)} danger={owed.overdueKobo > 0} />
       </View>
 
       <Card>
@@ -151,18 +158,17 @@ export default function Reports() {
         )}
       </Card>
 
+      <Card style={{ padding: space.lg, gap: space.md }}>
+        <View style={{ gap: 2 }}>
+          <T style={{ fontFamily: font.semibold }}>Send to your accountant</T>
+          <T variant="sub">A spreadsheet of every invoice and quote. Opens in Excel or Google Sheets.</T>
+        </View>
+        <Button kind="secondary" label="Export spreadsheet" onPress={exportCsv} style={{ flex: 0 }} />
+      </Card>
+
       <T variant="sub" style={{ textAlign: 'center' }}>
         An invoice counts as money in on the day you mark it paid.
       </T>
     </ScrollView>
-  );
-}
-
-function Stat({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
-  return (
-    <Card style={{ flex: 1, padding: space.md }}>
-      <T variant="label" numberOfLines={1}>{label}</T>
-      <T variant="mono" style={{ marginTop: 2, color: danger ? color.dueTx : color.tx }} numberOfLines={1} adjustsFontSizeToFit>{value}</T>
-    </Card>
   );
 }
