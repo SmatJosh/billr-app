@@ -353,12 +353,18 @@ export function SheetScreen({ title, children }: { title: string; children: Reac
   }, [y]);
   return (
     <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-      <Pressable accessibilityLabel="Close" onPress={() => router.back()} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,18,15,0.45)' }} />
+      <Pressable accessibilityLabel="Close sheet" onPress={() => router.back()} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,18,15,0.45)' }} />
       <Animated.View
         style={{ transform: [{ translateY: y }], maxHeight: '88%', backgroundColor: color.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: space.sm, overflow: 'hidden' }}
       >
         <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: color.edge, marginBottom: space.md }} />
-        <Text style={[styles.display, { fontSize: 30, lineHeight: 36, paddingHorizontal: space.lg }]} accessibilityRole="header">{title}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: space.lg, paddingRight: space.sm }}>
+          <Text style={[styles.display, { fontSize: 30, lineHeight: 36, flex: 1 }]} accessibilityRole="header">{title}</Text>
+          {/* Not everyone knows to tap outside or press Back, so closing is also a visible button. */}
+          <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? color.hover : color.surface, borderWidth: 1, borderColor: color.edge })}>
+            <Icon name="close" size={20} tint={color.tx} />
+          </Pressable>
+        </View>
         {children}
       </Animated.View>
     </View>
