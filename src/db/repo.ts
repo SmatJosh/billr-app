@@ -29,6 +29,8 @@ const BUSINESS_COLS: Record<keyof Omit<Business, 'id'>, string> = {
   paymentAccountNumber: 'payment_account_number',
   paymentAccountName: 'payment_account_name',
   defaultNotes: 'default_notes',
+  logoData: 'logo_data',
+  brandColor: 'brand_color',
 };
 
 const CLIENT_COLS: Record<keyof Omit<Client, 'id'>, string> = {
@@ -109,6 +111,8 @@ function toBusiness(r: Row): Business {
     paymentAccountNumber: r.payment_account_number,
     paymentAccountName: r.payment_account_name,
     defaultNotes: r.default_notes,
+    logoData: r.logo_data ?? '',
+    brandColor: r.brand_color ?? '',
   };
 }
 

@@ -1,4 +1,4 @@
-import { esc, multiline, PDF_CSS } from './invoiceHtml.ts';
+import { brandCss, businessBlock, esc, multiline, PDF_CSS } from './invoiceHtml.ts';
 import { formatMoney } from './format.ts';
 import { formatDay } from './dates.ts';
 import type { Statement } from './statement.ts';
@@ -26,15 +26,10 @@ export function renderStatementHtml({ business, client, statement: s, now }: Sta
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<style>${PDF_CSS}</style></head>
+<style>${PDF_CSS}${brandCss(business)}</style></head>
 <body>
   <div class="top">
-    <div>
-      <div class="biz">${esc(business.name) || 'Your business'}</div>
-      ${business.address ? `<div class="muted">${multiline(business.address)}</div>` : ''}
-      ${business.phone ? `<div class="muted mono">${esc(business.phone)}</div>` : ''}
-      ${business.email ? `<div class="muted">${esc(business.email)}</div>` : ''}
-    </div>
+    ${businessBlock(business, false)}
     <div>
       <div class="title">Statement</div>
       <div style="text-align:right">${s.from ? `${formatDay(s.from)} to ${formatDay(now)}` : `To ${formatDay(now)}`}</div>

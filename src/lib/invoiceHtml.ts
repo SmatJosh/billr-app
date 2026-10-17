@@ -1,6 +1,7 @@
 import { computeTotals, lineTotalKobo, VAT_RATE_PERCENT } from './money.ts';
 import { formatMoney, formatQuantity } from './format.ts';
 import { formatDay } from './dates.ts';
+import { brandHex, isLogo } from './brand.ts';
 import { DOC_LABEL, PAYMENT_METHOD_LABEL, type BillrDocument, type Business, type Client, type DocumentLine, type Payment } from './types.ts';
 
 export function esc(text: string | null | undefined): string {
@@ -41,6 +42,24 @@ export const PDF_CSS = `
   .stamp.full { background: #E3F3EA; color: #17633D; }
   .stamp.part { background: #FFE6D2; color: #8F3B00; }
 `;
+
+// Your brand: the chosen colour on the title and the rules, so every PDF from one business looks the same.
+export function brandCss(business: Business): string {
+  const hex = brandHex(business.brandColor);
+  return `.title { color: ${hex}; } th { border-bottom: 2px solid ${hex}; } .grand { border-top-color: ${hex}; } .logo { display: block; max-height: 64px; max-width: 200px; margin-bottom: 10px; }`;
+}
+
+// The sender, top left: logo, name, contact details.
+export function businessBlock(business: Business, withTaxId: boolean): string {
+  return `<div>
+      ${isLogo(business.logoData) ? `<img class="logo" src="${business.logoData}" alt="">` : ''}
+      <div class="biz">${esc(business.name) || 'Your business'}</div>
+      ${business.address ? `<div class="muted">${multiline(business.address)}</div>` : ''}
+      ${business.phone ? `<div class="muted mono">${esc(business.phone)}</div>` : ''}
+      ${business.email ? `<div class="muted">${esc(business.email)}</div>` : ''}
+      ${withTaxId && business.taxId ? `<div class="muted">TIN ${esc(business.taxId)}</div>` : ''}
+    </div>`;
+}
 
 export type InvoiceHtmlInput = {
   doc: BillrDocument;
@@ -97,16 +116,10 @@ export function renderInvoiceHtml({ doc, lines, business, client, payments = [],
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<style>${PDF_CSS}</style></head>
+<style>${PDF_CSS}${brandCss(business)}</style></head>
 <body>
   <div class="top">
-    <div>
-      <div class="biz">${esc(business.name) || 'Your business'}</div>
-      ${business.address ? `<div class="muted">${multiline(business.address)}</div>` : ''}
-      ${business.phone ? `<div class="muted mono">${esc(business.phone)}</div>` : ''}
-      ${business.email ? `<div class="muted">${esc(business.email)}</div>` : ''}
-      ${business.taxId ? `<div class="muted">TIN ${esc(business.taxId)}</div>` : ''}
-    </div>
+    ${businessBlock(business, true)}
     <div>
       <div class="title">${title}</div>
       <div class="mono" style="text-align:right">${receipt ? `for ${esc(doc.number)}` : esc(doc.number)}</div>

@@ -2,7 +2,7 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { color } from '../theme';
 
 // Line icons from the design canvas: 24 px box, 1.75 stroke, round ends.
-export type IconName = 'bank' | 'whatsapp' | 'home' | 'quotes' | 'clients' | 'reports' | 'more' | 'download' | 'chevron' | 'business' | 'items' | 'cloud' | 'info' | 'close';
+export type IconName = 'bank' | 'whatsapp' | 'home' | 'quotes' | 'clients' | 'reports' | 'more' | 'download' | 'chevron' | 'business' | 'items' | 'cloud' | 'info' | 'close' | 'brand';
 
 // filled: solid version of the five tab icons, for the open tab. cut is the colour behind it, used for the
 // small gaps that keep a solid shape readable.
@@ -97,6 +97,14 @@ export function Icon({ name, size = 24, tint = color.tx, filled, cut = color.acc
         <>
           <Circle {...p} cx={12} cy={12} r={9} />
           <Path {...p} d="M12 11v5M12 8h.01" />
+        </>
+      ) : null}
+      {name === 'brand' ? (
+        <>
+          <Path {...p} d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.9 0-.5-.2-.9-.5-1.3-.3-.3-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.2-4-7.7-9-7.7z" />
+          <Circle {...p} cx={7.5} cy={11} r={1} />
+          <Circle {...p} cx={10} cy={7} r={1} />
+          <Circle {...p} cx={15} cy={7.5} r={1} />
         </>
       ) : null}
       {name === 'close' ? <Path {...p} d="M6 6l12 12M18 6L6 18" /> : null}

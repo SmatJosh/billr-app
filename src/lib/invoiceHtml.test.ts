@@ -17,6 +17,8 @@ const business: Business = {
   paymentAccountNumber: '0123456789',
   paymentAccountName: 'Adaeze Couture',
   defaultNotes: '',
+  logoData: '',
+  brandColor: '',
 };
 
 const client: Client = { id: 1, name: 'Funke <Bello>', phone: '0805 221 9034', email: '', address: '', notes: '' };
@@ -90,4 +92,16 @@ test('a part-paid invoice shows the balance; a receipt lists payments and drops 
   assert.match(receipt, /18 Oct 2026/);
   assert.match(receipt, /Transfer · Deposit/);
   assert.doesNotMatch(receipt, /0123456789/);
+});
+
+test('your brand: the logo and colour go on the PDF; anything odd is ignored', () => {
+  const logo = 'data:image/png;base64,iVBORw0KGgo=';
+  const html = renderInvoiceHtml({ doc, lines: [], business: { ...business, logoData: logo, brandColor: '#17633D' }, client });
+  assert.ok(html.includes(`<img class="logo" src="${logo}"`));
+  assert.match(html, /\.title \{ color: #17633D; \}/);
+
+  const plain = renderInvoiceHtml({ doc, lines: [], business: { ...business, logoData: 'javascript:alert(1)', brandColor: 'red;}body{display:none' }, client });
+  assert.ok(!plain.includes('<img'));
+  assert.ok(!plain.includes('display:none'));
+  assert.match(plain, /\.title \{ color: #1C1915; \}/);
 });
