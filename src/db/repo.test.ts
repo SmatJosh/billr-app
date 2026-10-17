@@ -1,7 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { migrate } from './schema.ts';
-import { addLine, convertDocument, createClient, createDocument, ensureBusiness, getDocument, getLines, updateBusiness, updateDocument } from './repo.ts';
+import {
+  addLine,
+  addPayment,
+  convertDocument,
+  createClient,
+  createDocument,
+  deleteDocument,
+  deletePayment,
+  ensureBusiness,
+  getDocument,
+  getLines,
+  listClients,
+  listDocuments,
+  listPayments,
+  updateBusiness,
+  updateDocument,
+  updateLine,
+} from './repo.ts';
 import { openTestDb } from '../sync/testkit.ts';
 
 async function setup() {
@@ -63,4 +80,44 @@ test('a quote can become a proforma, and the proforma an invoice', async () => {
   const invId = await convertDocument(db, proId, 'invoice');
   assert.equal((await getDocument(db, invId))!.number, 'INV-0001');
   assert.equal((await getDocument(db, proId))!.status, 'converted');
+});
+
+test('a deposit leaves the invoice owed; payments that cover the total mark it paid', async () => {
+  const { db, business } = await setup();
+  const clientId = await createClient(db, business.id, 'Grace Okon');
+  const id = await createDocument(db, business, 'invoice');
+  await updateDocument(db, id, { clientId });
+  const lineId = await addLine(db, id, { description: 'Wedding planning', quantity: 1, unitPriceKobo: 18_000_000 });
+
+  await addPayment(db, id, { amountKobo: 8_000_000, paidOn: '2026-10-10', method: 'transfer', note: 'Deposit' });
+  assert.equal((await getDocument(db, id))!.status, 'sent', 'a part-paid draft counts as sent');
+  const [row] = await listDocuments(db, business.id);
+  assert.equal(row.paidKobo, 8_000_000);
+  assert.equal((await listClients(db, business.id))[0].owedKobo, 10_000_000, 'the client owes only the balance');
+
+  await addPayment(db, id, { amountKobo: 10_000_000, paidOn: '2026-10-15', method: 'cash', note: '' });
+  assert.equal((await getDocument(db, id))!.status, 'paid');
+
+  // The price goes up after payment: the invoice is owed again.
+  const [line] = await getLines(db, id);
+  assert.equal(line.id, lineId);
+  await updateLine(db, line, { unitPriceKobo: 20_000_000 });
+  assert.equal((await getDocument(db, id))!.status, 'sent');
+
+  const pays = await listPayments(db, id);
+  assert.deepEqual(pays.map((p) => [p.paidOn, p.method]), [['2026-10-10', 'transfer'], ['2026-10-15', 'cash']]);
+  await deletePayment(db, pays[1]);
+  assert.equal((await listPayments(db, id)).length, 1);
+
+  await deleteDocument(db, id);
+  assert.equal((await listPayments(db, id)).length, 0, 'deleting the invoice deletes its payments');
+});
+
+test('an invoice marked paid before payments existed stays paid when edited', async () => {
+  const { db, business } = await setup();
+  const id = await createDocument(db, business, 'invoice');
+  await addLine(db, id, { description: 'Tutoring', quantity: 1, unitPriceKobo: 5_000_000 });
+  await updateDocument(db, id, { status: 'paid' });
+  await updateDocument(db, id, { notes: 'Thanks' });
+  assert.equal((await getDocument(db, id))!.status, 'paid');
 });

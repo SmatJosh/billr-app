@@ -74,3 +74,20 @@ test('a quote says valid until, never on receipt', () => {
   assert.match(html, /22 Oct 2026/);
   assert.doesNotMatch(html, /On receipt/);
 });
+
+test('a part-paid invoice shows the balance; a receipt lists payments and drops bank details once paid off', () => {
+  const pay = (amountKobo: number, paidOn: string) => ({ id: 1, documentId: 1, amountKobo, paidOn, method: 'transfer' as const, note: 'Deposit' });
+  const partHtml = renderInvoiceHtml({ doc, lines, business, client, payments: [pay(5_000_000, '2026-10-16')] });
+  assert.match(partHtml, /Paid so far/);
+  assert.match(partHtml, /Balance due/);
+  assert.match(partHtml, /0123456789/, 'still owed, so the bank details stay');
+
+  const total = 9_675_000; // 90,000 + 7.5% VAT
+  const receipt = renderInvoiceHtml({ doc, lines, business, client, payments: [pay(total, '2026-10-18')], receipt: true });
+  assert.match(receipt, /<div class="title">Receipt<\/div>/);
+  assert.match(receipt, /for INV-0048/);
+  assert.match(receipt, /Paid in full/);
+  assert.match(receipt, /18 Oct 2026/);
+  assert.match(receipt, /Transfer · Deposit/);
+  assert.doesNotMatch(receipt, /0123456789/);
+});

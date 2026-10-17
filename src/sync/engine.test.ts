@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { MIGRATIONS, migrate } from '../db/schema.ts';
 import {
   addLine,
+  addPayment,
   createClient,
   createDocument,
   deleteClient,
@@ -11,6 +12,7 @@ import {
   getLines,
   listClients,
   listDocuments,
+  listPayments,
   updateBusiness,
   updateClient,
   updateDocument,
@@ -182,4 +184,39 @@ test('invoices made before this update get cloud ids and are queued for backup',
   for (const r of rows) assert.match(r.uid, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.notEqual(rows[0].uid, rows[1].uid);
   assert.equal(await countPending(db), 3);
+});
+
+test('payments back up and restore with their invoice', async () => {
+  const remote = new FakeRemote();
+  const { db, docId } = await phoneWithInvoice();
+  await addPayment(db as any, docId, { amountKobo: 2_000_000, paidOn: '2026-10-12', method: 'transfer', note: 'Deposit' });
+  await sync(db, remote, USER);
+  assert.equal(remote.live('payments').length, 1);
+
+  const fresh = await phone();
+  await sync(fresh, remote, USER);
+  const [doc] = await listDocuments(fresh as any, 1);
+  assert.equal(doc.paidKobo, 2_000_000);
+  const [p] = await listPayments(fresh as any, doc.id);
+  assert.deepEqual([p.paidOn, p.method, p.note], ['2026-10-12', 'transfer', 'Deposit']);
+});
+
+test('until the payments table exists in the cloud, backup of everything else still works', async () => {
+  const remote = new FakeRemote();
+  const missing = new Error("Could not find the table 'public.payments' in the schema cache");
+  const realUpsert = remote.upsert.bind(remote);
+  const realPull = remote.pull.bind(remote);
+  remote.upsert = async (table, rows) => {
+    if (table === 'payments') throw missing;
+    return realUpsert(table, rows);
+  };
+  remote.pull = async (table, since, limit) => {
+    if (table === 'payments') throw missing;
+    return realPull(table, since, limit);
+  };
+  const { db, docId } = await phoneWithInvoice();
+  await addPayment(db as any, docId, { amountKobo: 1_000_000, paidOn: '2026-10-12', method: 'cash', note: '' });
+  await sync(db, remote, USER);
+  assert.equal(remote.live('documents').length, 1);
+  assert.equal(await countPending(db), 1, 'the payment waits on the phone for the cloud table');
 });

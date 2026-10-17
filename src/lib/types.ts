@@ -34,9 +34,29 @@ export type Item = {
 };
 
 export type DocType = 'invoice' | 'quote' | 'proforma';
-// Invoices go draft -> sent -> paid. Quotes and proformas go draft -> sent, then the client's answer
+// Invoices go draft -> sent -> paid; paid is set by the app once payments cover the total. Quotes and proformas go draft -> sent, then the client's answer
 // (accepted or declined), and converted once turned into the next document.
 export type DocStatus = 'draft' | 'sent' | 'paid' | 'accepted' | 'declined' | 'converted';
+
+export type PaymentMethod = 'transfer' | 'cash' | 'pos' | 'other';
+
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  transfer: 'Transfer',
+  cash: 'Cash',
+  pos: 'POS',
+  other: 'Other',
+};
+
+// Money received against an invoice: a deposit, a part payment or the full amount. paidOn is the day the
+// money came in, which Reports use, not the day it was typed in.
+export type Payment = {
+  id: number;
+  documentId: number;
+  amountKobo: number;
+  paidOn: string;
+  method: PaymentMethod;
+  note: string;
+};
 
 export type DocumentLine = {
   id: number;

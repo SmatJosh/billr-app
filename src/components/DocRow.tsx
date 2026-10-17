@@ -1,12 +1,13 @@
 import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import type { DocListRow } from '../db/repo';
-import { formatMoney, initials } from '../lib/format';
+import { formatMoney, formatMoneyShort, initials } from '../lib/format';
 import { formatDayShort } from '../lib/dates';
 import { Avatar, Card, pillFor, StatusPill, T } from './ui';
 import { font, space } from '../theme';
 
 function detail(d: DocListRow): string {
+  if (d.type === 'invoice' && d.status === 'sent' && d.paidKobo > 0) return `${formatMoneyShort(d.totalKobo - d.paidKobo, d.currency)} left`;
   if (d.type === 'invoice') return d.termsDays === 0 && d.status !== 'paid' ? 'due on receipt' : `due ${formatDayShort(d.dueDate)}`;
   // The number already says QUO or PRO; spell out proforma, which fewer people know by its prefix.
   if (d.type === 'quote') return d.status === 'converted' ? 'quote' : `until ${formatDayShort(d.dueDate)}`;

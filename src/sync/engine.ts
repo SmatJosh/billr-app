@@ -59,7 +59,28 @@ const SPECS: Record<SyncedTable, Spec> = {
     cols: ['position', 'description', 'quantity', 'unit_price_kobo'],
     refs: [{ col: 'document_id', table: 'documents', required: true }],
   },
+  payments: {
+    cols: ['amount_kobo', 'paid_on', 'method', 'note', 'created_at', 'updated_at'],
+    refs: [{ col: 'document_id', table: 'documents', required: true }],
+  },
 };
+
+// Tables added after the first cloud setup. Until the owner runs that table's SQL in Supabase, the cloud says it
+// does not exist; sync then skips it (its rows wait on the phone) instead of failing the whole backup.
+const ADDED_LATER: SyncedTable[] = ['payments'];
+
+export function isMissingTable(e: unknown): boolean {
+  return /schema cache|does not exist|PGRST205|42P01/i.test(String((e as Error)?.message ?? e));
+}
+
+async function tolerant(table: SyncedTable, work: () => Promise<number>): Promise<number> {
+  try {
+    return await work();
+  } catch (e) {
+    if (ADDED_LATER.includes(table) && isMissingTable(e)) return 0;
+    throw e;
+  }
+}
 
 const PUSH_BATCH = 200;
 const PULL_PAGE = 500;
@@ -127,34 +148,38 @@ async function adoptCloudBusiness(db: SyncDb, remote: Remote): Promise<void> {
 async function push(db: SyncDb, remote: Remote, userId: string): Promise<number> {
   let count = 0;
   // Parents first, so a document never arrives before its client.
-  for (const table of SYNCED_TABLES) {
-    const spec = SPECS[table];
-    const joins = spec.refs.map((r, i) => `LEFT JOIN ${r.table} p${i} ON p${i}.id = t.${r.col}`).join(' ');
-    const refCols = spec.refs.map((r, i) => `, p${i}.uid AS ref_${r.col}`).join('');
-    for (;;) {
-      const rows = await db.getAllAsync<Record<string, any>>(
-        `SELECT t.*${refCols} FROM ${table} t ${joins} WHERE t.synced_rev < t.rev ORDER BY t.id LIMIT ${PUSH_BATCH}`,
-        [],
-      );
-      if (rows.length === 0) break;
-      const ready = rows.filter((r) => spec.refs.every((ref) => !ref.required || r[`ref_${ref.col}`]));
-      if (ready.length) {
-        await remote.upsert(table, ready.map((r) => toRemote(spec, r, userId)));
-        for (const r of ready) {
-          await db.runAsync(`UPDATE ${table} SET synced_rev = ? WHERE id = ?`, [r.rev, r.id]);
-        }
-        count += ready.length;
+  for (const table of SYNCED_TABLES) count += await tolerant(table, () => pushTable(db, remote, userId, table));
+  return count;
+}
+
+async function pushTable(db: SyncDb, remote: Remote, userId: string, table: SyncedTable): Promise<number> {
+  let count = 0;
+  const spec = SPECS[table];
+  const joins = spec.refs.map((r, i) => `LEFT JOIN ${r.table} p${i} ON p${i}.id = t.${r.col}`).join(' ');
+  const refCols = spec.refs.map((r, i) => `, p${i}.uid AS ref_${r.col}`).join('');
+  for (;;) {
+    const rows = await db.getAllAsync<Record<string, any>>(
+      `SELECT t.*${refCols} FROM ${table} t ${joins} WHERE t.synced_rev < t.rev ORDER BY t.id LIMIT ${PUSH_BATCH}`,
+      [],
+    );
+    if (rows.length === 0) break;
+    const ready = rows.filter((r) => spec.refs.every((ref) => !ref.required || r[`ref_${ref.col}`]));
+    if (ready.length) {
+      await remote.upsert(table, ready.map((r) => toRemote(spec, r, userId)));
+      for (const r of ready) {
+        await db.runAsync(`UPDATE ${table} SET synced_rev = ? WHERE id = ?`, [r.rev, r.id]);
       }
-      // A row whose parent is gone cannot be uploaded; stop rather than loop on it.
-      if (ready.length < rows.length || rows.length < PUSH_BATCH) break;
+      count += ready.length;
     }
-    const gone = await db.getAllAsync<{ uid: string }>('SELECT uid FROM sync_tombstones WHERE tbl = ?', [table]);
-    if (gone.length) {
-      const ids = gone.map((g) => g.uid);
-      await remote.markDeleted(table, ids);
-      for (const id of ids) await db.runAsync('DELETE FROM sync_tombstones WHERE tbl = ? AND uid = ?', [table, id]);
-      count += ids.length;
-    }
+    // A row whose parent is gone cannot be uploaded; stop rather than loop on it.
+    if (ready.length < rows.length || rows.length < PUSH_BATCH) break;
+  }
+  const gone = await db.getAllAsync<{ uid: string }>('SELECT uid FROM sync_tombstones WHERE tbl = ?', [table]);
+  if (gone.length) {
+    const ids = gone.map((g) => g.uid);
+    await remote.markDeleted(table, ids);
+    for (const id of ids) await db.runAsync('DELETE FROM sync_tombstones WHERE tbl = ? AND uid = ?', [table, id]);
+    count += ids.length;
   }
   return count;
 }
@@ -168,24 +193,28 @@ function toRemote(spec: Spec, r: Record<string, any>, userId: string): Record<st
 
 async function pull(db: SyncDb, remote: Remote): Promise<number> {
   let count = 0;
-  for (const table of SYNCED_TABLES) {
-    const key = `pulled_at:${table}`;
-    const cursor = await getMeta(db, key);
-    let since = cursor ? minusMs(cursor, PULL_OVERLAP_MS) : null;
-    let newest = cursor;
-    for (;;) {
-      const rows = await remote.pull(table, since, PULL_PAGE);
-      for (const row of rows) {
-        if (await applyRow(db, table, row)) count += 1;
-        if (!newest || row.synced_at > newest) newest = row.synced_at;
-      }
-      if (rows.length < PULL_PAGE) break;
-      const last = rows[rows.length - 1].synced_at;
-      if (last === since) break;
-      since = last;
+  for (const table of SYNCED_TABLES) count += await tolerant(table, () => pullTable(db, remote, table));
+  return count;
+}
+
+async function pullTable(db: SyncDb, remote: Remote, table: SyncedTable): Promise<number> {
+  let count = 0;
+  const key = `pulled_at:${table}`;
+  const cursor = await getMeta(db, key);
+  let since = cursor ? minusMs(cursor, PULL_OVERLAP_MS) : null;
+  let newest = cursor;
+  for (;;) {
+    const rows = await remote.pull(table, since, PULL_PAGE);
+    for (const row of rows) {
+      if (await applyRow(db, table, row)) count += 1;
+      if (!newest || row.synced_at > newest) newest = row.synced_at;
     }
-    if (newest && newest !== cursor) await setMeta(db, key, newest);
+    if (rows.length < PULL_PAGE) break;
+    const last = rows[rows.length - 1].synced_at;
+    if (last === since) break;
+    since = last;
   }
+  if (newest && newest !== cursor) await setMeta(db, key, newest);
   return count;
 }
 
@@ -261,9 +290,12 @@ async function freeDocumentNumber(db: SyncDb, values: Record<string, Param>, own
 async function deleteLocal(db: SyncDb, table: SyncedTable, id: number): Promise<void> {
   if (table === 'businesses') return; // A business is never removed by sync.
   if (table === 'clients') await db.runAsync('UPDATE documents SET client_id = NULL WHERE client_id = ?', [id]);
-  if (table === 'documents') await db.runAsync('DELETE FROM document_lines WHERE document_id = ?', [id]);
+  if (table === 'documents') {
+    await db.runAsync('DELETE FROM document_lines WHERE document_id = ?', [id]);
+    await db.runAsync('DELETE FROM payments WHERE document_id = ?', [id]);
+  }
   await db.runAsync(`DELETE FROM ${table} WHERE id = ?`, [id]);
-  // The delete trigger also queued this row (and any lines) for upload as deleted. The caller clears the row's
+  // The delete trigger also queued this row (and any lines or payments) for upload as deleted. The caller clears the row's
   // own entry; re-sending a line's delete is harmless.
 }
 

@@ -261,7 +261,7 @@ export function Segmented<V extends string>({ options, value, onChange }: { opti
   );
 }
 
-export type PillKind = DocStatus | 'overdue' | 'awaiting';
+export type PillKind = DocStatus | 'overdue' | 'awaiting' | 'part';
 
 const STATUS: Record<PillKind, { label: string; bg: string; tx: string }> = {
   draft: { label: 'Draft', bg: color.muted, tx: color.tx2 },
@@ -269,14 +269,17 @@ const STATUS: Record<PillKind, { label: string; bg: string; tx: string }> = {
   paid: { label: 'Paid', bg: color.paidBg, tx: color.paidTx },
   overdue: { label: 'Overdue', bg: color.dueBg, tx: color.dueTx },
   awaiting: { label: 'Awaiting reply', bg: color.partBg, tx: color.partTx },
+  part: { label: 'Part paid', bg: color.partBg, tx: color.partTx },
   accepted: { label: 'Accepted', bg: color.paidBg, tx: color.paidTx },
   declined: { label: 'Declined', bg: color.muted, tx: color.tx2 },
   converted: { label: 'Converted', bg: color.paidBg, tx: color.paidTx },
 };
 
-// What a document's pill says: an unpaid invoice past its due date is overdue; a sent quote awaits a reply.
-export function pillFor(d: { type: DocType; status: DocStatus; dueDate: string }, now: string = today()): PillKind {
-  if (d.type === 'invoice') return d.status === 'sent' && d.dueDate < now ? 'overdue' : d.status;
+// What a document's pill says: an unpaid invoice past its due date is overdue, one with a deposit is part paid;
+// a sent quote awaits a reply.
+export function pillFor(d: { type: DocType; status: DocStatus; dueDate: string; paidKobo?: number }, now: string = today()): PillKind {
+  if (d.type === 'invoice' && d.status === 'sent') return d.dueDate < now ? 'overdue' : (d.paidKobo ?? 0) > 0 ? 'part' : 'sent';
+  if (d.type === 'invoice') return d.status;
   return d.status === 'sent' ? 'awaiting' : d.status;
 }
 

@@ -10,6 +10,7 @@ import {
   type DocType,
   type DocumentLine,
   type Item,
+  type Payment,
 } from '../lib/types.ts';
 
 type Row = Record<string, any>;
@@ -135,7 +136,7 @@ function toClient(r: Row): Client {
 
 export async function listClients(db: SQLiteDatabase, businessId: number): Promise<(Client & { owedKobo: number })[]> {
   const rows = await db.getAllAsync<Row>(
-    `SELECT c.*, COALESCE((SELECT SUM(d.total_kobo) FROM documents d
+    `SELECT c.*, COALESCE((SELECT SUM(d.total_kobo - ${PAID_SQL}) FROM documents d
         WHERE d.client_id = c.id AND d.type = 'invoice' AND d.status = 'sent'), 0) AS owed
      FROM clients c WHERE c.business_id = ? AND c.name != '' ORDER BY c.name COLLATE NOCASE`,
     [businessId],
@@ -232,7 +233,10 @@ function toLine(r: Row): DocumentLine {
   };
 }
 
-export type DocListRow = BillrDocument & { clientName: string | null };
+// Money received so far on the document d.
+const PAID_SQL = '(SELECT COALESCE(SUM(p.amount_kobo), 0) FROM payments p WHERE p.document_id = d.id)';
+
+export type DocListRow = BillrDocument & { clientName: string | null; paidKobo: number; payments: Pick<Payment, 'amountKobo' | 'paidOn'>[] };
 
 export async function listDocuments(db: SQLiteDatabase, businessId: number): Promise<DocListRow[]> {
   const rows = await db.getAllAsync<Row>(
@@ -240,7 +244,21 @@ export async function listDocuments(db: SQLiteDatabase, businessId: number): Pro
      WHERE d.business_id = ? ORDER BY d.updated_at DESC, d.id DESC`,
     [businessId],
   );
-  return rows.map((r) => ({ ...toDoc(r), clientName: r.client_name }));
+  const pays = await db.getAllAsync<Row>(
+    `SELECT p.document_id, p.amount_kobo, p.paid_on FROM payments p JOIN documents d ON d.id = p.document_id
+     WHERE d.business_id = ? ORDER BY p.paid_on, p.id`,
+    [businessId],
+  );
+  const byDoc = new Map<number, { amountKobo: number; paidOn: string }[]>();
+  for (const p of pays) {
+    const list = byDoc.get(p.document_id) ?? [];
+    list.push({ amountKobo: p.amount_kobo, paidOn: p.paid_on });
+    byDoc.set(p.document_id, list);
+  }
+  return rows.map((r) => {
+    const payments = byDoc.get(r.id) ?? [];
+    return { ...toDoc(r), clientName: r.client_name, payments, paidKobo: payments.reduce((s, p) => s + p.amountKobo, 0) };
+  });
 }
 
 export async function getDocument(db: SQLiteDatabase, id: number): Promise<BillrDocument | null> {
@@ -323,6 +341,7 @@ async function refreshTotal(db: SQLiteDatabase, documentId: number): Promise<voi
   const lines = await getLines(db, documentId);
   const { totalKobo } = computeTotals({ ...doc, lines });
   await db.runAsync(`UPDATE documents SET total_kobo = ?, updated_at = datetime('now') WHERE id = ?`, [totalKobo, documentId]);
+  await refreshPaid(db, documentId);
 }
 
 export async function updateDocument(db: SQLiteDatabase, id: number, patch: Partial<BillrDocument>): Promise<void> {
@@ -341,6 +360,7 @@ export async function markSent(db: SQLiteDatabase, id: number): Promise<void> {
 export async function deleteDocument(db: SQLiteDatabase, id: number): Promise<void> {
   await db.withTransactionAsync(async () => {
     await db.runAsync('DELETE FROM document_lines WHERE document_id = ?', [id]);
+    await db.runAsync('DELETE FROM payments WHERE document_id = ?', [id]);
     await db.runAsync('DELETE FROM documents WHERE id = ?', [id]);
   });
 }
@@ -370,4 +390,49 @@ export async function updateLine(db: SQLiteDatabase, line: DocumentLine, patch: 
 export async function deleteLine(db: SQLiteDatabase, line: DocumentLine): Promise<void> {
   await db.runAsync('DELETE FROM document_lines WHERE id = ?', [line.id]);
   await refreshTotal(db, line.documentId);
+}
+
+// ---------- Payments ----------
+
+function toPayment(r: Row): Payment {
+  return { id: r.id, documentId: r.document_id, amountKobo: r.amount_kobo, paidOn: r.paid_on, method: r.method, note: r.note };
+}
+
+export async function listPayments(db: SQLiteDatabase, documentId: number): Promise<Payment[]> {
+  const rows = await db.getAllAsync<Row>('SELECT * FROM payments WHERE document_id = ? ORDER BY paid_on, id', [documentId]);
+  return rows.map(toPayment);
+}
+
+export async function addPayment(db: SQLiteDatabase, documentId: number, p: Omit<Payment, 'id' | 'documentId'>): Promise<number> {
+  const res = await db.runAsync('INSERT INTO payments (document_id, amount_kobo, paid_on, method, note) VALUES (?, ?, ?, ?, ?)', [
+    documentId,
+    p.amountKobo,
+    p.paidOn,
+    p.method,
+    p.note,
+  ]);
+  await refreshPaid(db, documentId);
+  return res.lastInsertRowId;
+}
+
+export async function deletePayment(db: SQLiteDatabase, payment: Payment): Promise<void> {
+  await db.runAsync('DELETE FROM payments WHERE id = ?', [payment.id]);
+  await refreshPaid(db, payment.documentId);
+}
+
+// An invoice is paid once its payments cover the total, and is sent (still owed) while they fall short, so it
+// goes back to sent if a payment is removed or the total grows. Invoices marked paid before payments existed have none and are left as they are.
+async function refreshPaid(db: SQLiteDatabase, documentId: number): Promise<void> {
+  const r = await db.getFirstAsync<Row>(
+    `SELECT d.type, d.status, d.total_kobo, COUNT(p.id) AS n, COALESCE(SUM(p.amount_kobo), 0) AS paid
+     FROM documents d LEFT JOIN payments p ON p.document_id = d.id WHERE d.id = ? GROUP BY d.id`,
+    [documentId],
+  );
+  if (!r || r.type !== 'invoice' || r.n === 0) return;
+  const full = r.total_kobo > 0 && r.paid >= r.total_kobo;
+  // A deposit means the client has the invoice, so a part-paid draft counts as sent (and as money still owed).
+  const status = full ? 'paid' : 'sent';
+  if (status !== r.status) {
+    await db.runAsync(`UPDATE documents SET status = ?, updated_at = datetime('now') WHERE id = ?`, [status, documentId]);
+  }
 }

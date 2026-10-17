@@ -18,7 +18,8 @@ export async function sharePdf(input: InvoiceHtmlInput): Promise<boolean> {
   if (!(await Sharing.isAvailableAsync())) return false;
   const { uri: printUri, base64 } = await Print.printToFileAsync({ html: renderInvoiceHtml(input), base64: true });
   if (!base64) throw new Error('The PDF came back empty');
-  const file = new File(Paths.cache, `${input.doc.number}.pdf`);
+  const name = input.receipt ? `Receipt-${input.doc.number}` : input.doc.number;
+  const file = new File(Paths.cache, `${name}.pdf`);
   if (file.exists) file.delete();
   file.create();
   file.write(base64, { encoding: 'base64' });
@@ -30,7 +31,7 @@ export async function sharePdf(input: InvoiceHtmlInput): Promise<boolean> {
   await Sharing.shareAsync(file.uri, {
     mimeType: 'application/pdf',
     UTI: 'com.adobe.pdf',
-    dialogTitle: `${DOC_LABEL[input.doc.type]} ${input.doc.number}`,
+    dialogTitle: input.receipt ? `Receipt for ${input.doc.number}` : `${DOC_LABEL[input.doc.type]} ${input.doc.number}`,
   });
   return true;
 }
@@ -59,6 +60,22 @@ export function whatsAppMessage({ doc, business, client }: Pick<InvoiceHtmlInput
   }
   parts.push('', 'Thank you.');
   return parts.filter((p) => p !== undefined).join('\n');
+}
+
+// The thank-you message sent with a payment, saying what is left to pay.
+export function receiptMessage(
+  { doc, business, client }: Pick<InvoiceHtmlInput, 'doc' | 'business' | 'client'>,
+  lastKobo: number,
+  balanceKobo: number,
+): string {
+  const money = (k: number) => formatMoney(k, doc.currency, { decimals: true });
+  return [
+    `Hello${client?.name ? ' ' + client.name.split(' ')[0] : ''},`,
+    `${business.name} has received your payment of ${money(lastKobo)} for invoice ${doc.number}.`,
+    balanceKobo > 0 ? `Balance left: ${money(balanceKobo)}.` : 'The invoice is now paid in full.',
+    '',
+    'Thank you.',
+  ].join('\n');
 }
 
 export async function openWhatsApp(phone: string, message: string): Promise<boolean> {

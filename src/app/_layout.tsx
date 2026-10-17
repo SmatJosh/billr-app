@@ -53,6 +53,7 @@ export default function RootLayout() {
             <Stack.Screen name="invoice/[id]" options={{ title: 'Invoice' }} />
             <Stack.Screen name="invoice/pick-client" options={SHEET} />
             <Stack.Screen name="invoice/pick-item" options={SHEET} />
+            <Stack.Screen name="invoice/record-payment" options={SHEET} />
             <Stack.Screen name="sign-in" options={{ title: '' }} />
           </Stack>
         </SyncProvider>
