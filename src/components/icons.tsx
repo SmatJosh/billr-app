@@ -4,8 +4,55 @@ import { color } from '../theme';
 // Line icons from the design canvas: 24 px box, 1.75 stroke, round ends.
 export type IconName = 'bank' | 'whatsapp' | 'home' | 'quotes' | 'clients' | 'reports' | 'more' | 'download' | 'chevron' | 'business' | 'items' | 'cloud' | 'info' | 'close';
 
-export function Icon({ name, size = 24, tint = color.tx }: { name: IconName; size?: number; tint?: string }) {
+// filled: solid version of the five tab icons, for the open tab. cut is the colour behind it, used for the
+// small gaps that keep a solid shape readable.
+export function Icon({ name, size = 24, tint = color.tx, filled, cut = color.accentTint }: { name: IconName; size?: number; tint?: string; filled?: boolean; cut?: string }) {
   const p = { stroke: tint, strokeWidth: 1.75, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' };
+  if (filled) {
+    const f = { ...p, fill: tint };
+    const solid = (
+      <>
+        {name === 'home' ? <Path {...f} d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" /> : null}
+        {name === 'quotes' ? (
+          <>
+            <Rect {...f} x={4} y={5} width={16} height={17} rx={2} />
+            <Rect {...f} stroke={cut} strokeWidth={2} x={8} y={2.5} width={8} height={5} rx={1.5} />
+            <Path stroke={cut} strokeWidth={1.75} strokeLinecap="round" d="M8 12h8M8 16h5" />
+          </>
+        ) : null}
+        {name === 'clients' ? (
+          <>
+            <Circle {...f} cx={9} cy={8} r={4} />
+            <Path {...f} d="M2 21a7 7 0 0 1 14 0z" />
+            <Path {...p} d="M16 4a4 4 0 0 1 0 8M22 21a7 7 0 0 0-4-6.3" />
+          </>
+        ) : null}
+        {name === 'reports' ? (
+          <>
+            <Path {...p} d="M3 20h18" />
+            <Rect fill={tint} x={4.5} y={10} width={3.5} height={7} rx={1} />
+            <Rect fill={tint} x={10.25} y={5} width={3.5} height={12} rx={1} />
+            <Rect fill={tint} x={16} y={7.5} width={3.5} height={9.5} rx={1} />
+          </>
+        ) : null}
+        {name === 'more' ? (
+          <>
+            <Rect {...f} x={4} y={4} width={6} height={6} rx={1.5} />
+            <Rect {...f} x={14} y={4} width={6} height={6} rx={1.5} />
+            <Rect {...f} x={4} y={14} width={6} height={6} rx={1.5} />
+            <Rect {...f} x={14} y={14} width={6} height={6} rx={1.5} />
+          </>
+        ) : null}
+      </>
+    );
+    if (['home', 'quotes', 'clients', 'reports', 'more'].includes(name)) {
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24">
+          {solid}
+        </Svg>
+      );
+    }
+  }
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       {name === 'whatsapp' ? (
