@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { color, font, radius, space, TOUCH } from '../theme';
 import type { DocStatus, DocType } from '../lib/types';
+import { router } from 'expo-router';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Icon } from './icons';
 import { today } from '../lib/dates';
@@ -340,6 +341,27 @@ export function BottomSheet({ open, onClose, title, children, doneLabel = 'Got i
         </Animated.View>
       </View>
     </Modal>
+  );
+}
+
+// A whole route shown as a sheet sliding up over the screen it came from: the picker routes use it so the
+// invoice stays in view behind. Tapping the dimmed part or Back closes it like any other screen.
+export function SheetScreen({ title, children }: { title: string; children: ReactNode }) {
+  const y = useRef(new Animated.Value(600)).current;
+  useEffect(() => {
+    Animated.timing(y, { toValue: 0, duration: 260, useNativeDriver: true }).start();
+  }, [y]);
+  return (
+    <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+      <Pressable accessibilityLabel="Close" onPress={() => router.back()} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,18,15,0.45)' }} />
+      <Animated.View
+        style={{ transform: [{ translateY: y }], maxHeight: '88%', backgroundColor: color.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: space.sm, overflow: 'hidden' }}
+      >
+        <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: color.edge, marginBottom: space.md }} />
+        <Text style={[styles.display, { fontSize: 30, lineHeight: 36, paddingHorizontal: space.lg }]} accessibilityRole="header">{title}</Text>
+        {children}
+      </Animated.View>
+    </View>
   );
 }
 
