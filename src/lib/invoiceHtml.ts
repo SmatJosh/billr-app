@@ -49,7 +49,8 @@ export function renderInvoiceHtml({ doc, lines, business, client }: InvoiceHtmlI
 
   const hasPayment = business.paymentBankName || business.paymentAccountNumber || business.paymentAccountName;
   const discountLabel = doc.discountType === 'percent' ? `Discount (${formatQuantity(doc.discountPercent)}%)` : 'Discount';
-  const due = doc.termsDays === 0 ? 'On receipt' : formatDay(doc.dueDate);
+  const isQuote = doc.type === 'quote';
+  const due = doc.termsDays === 0 && !isQuote ? 'On receipt' : formatDay(doc.dueDate);
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -97,7 +98,7 @@ export function renderInvoiceHtml({ doc, lines, business, client }: InvoiceHtmlI
       ${client?.address ? `<div>${multiline(client.address)}</div>` : ''}
     </div>
     <div><div class="k">Issue date</div><div>${formatDay(doc.issueDate)}</div></div>
-    <div><div class="k">Due date</div><div>${due}</div></div>
+    <div><div class="k">${isQuote ? 'Valid until' : 'Due date'}</div><div>${due}</div></div>
   </div>
 
   <table>

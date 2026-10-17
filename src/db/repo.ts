@@ -215,6 +215,7 @@ function toDoc(r: Row): BillrDocument {
     notes: r.notes,
     status: r.status,
     totalKobo: r.total_kobo,
+    sentAt: r.sent_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -264,13 +265,53 @@ export async function createDocument(db: SQLiteDatabase, business: Business, typ
     );
     const seq = next?.seq ?? 1;
     const issue = today();
+    const days = DEFAULT_DAYS[type];
     const res = await db.runAsync(
       `INSERT INTO documents (business_id, type, number, seq, currency, issue_date, due_date, terms_days, vat_enabled, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [business.id, type, documentNumber(DOC_PREFIX[type], seq), seq, business.defaultCurrency, issue, addDays(issue, 7), 7,
+      [business.id, type, documentNumber(DOC_PREFIX[type], seq), seq, business.defaultCurrency, issue, addDays(issue, days), days,
         business.vatDefault ? 1 : 0, business.defaultNotes],
     );
     id = res.lastInsertRowId;
+  });
+  return id;
+}
+
+// Invoices and proformas are due in 7 days; a quote stays valid for 14.
+const DEFAULT_DAYS: Record<DocType, number> = { invoice: 7, proforma: 7, quote: 14 };
+
+// Turns a quote into a proforma or invoice (or a proforma into an invoice): same client, items, discount,
+// VAT and notes, a fresh number and dates. The source is marked converted so it leaves "Awaiting reply".
+export async function convertDocument(db: SQLiteDatabase, sourceId: number, type: DocType): Promise<number> {
+  const src = await getDocument(db, sourceId);
+  if (!src) throw new Error('Document not found');
+  const lines = await getLines(db, sourceId);
+  let id = 0;
+  await db.withTransactionAsync(async () => {
+    const r = await db.getFirstAsync<{ business_id: number }>('SELECT business_id FROM documents WHERE id = ?', [sourceId]);
+    const businessId = r!.business_id;
+    const next = await db.getFirstAsync<{ seq: number }>(
+      'SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM documents WHERE business_id = ? AND type = ?',
+      [businessId, type],
+    );
+    const seq = next?.seq ?? 1;
+    const issue = today();
+    const days = DEFAULT_DAYS[type];
+    const res = await db.runAsync(
+      `INSERT INTO documents (business_id, client_id, type, number, seq, currency, issue_date, due_date, terms_days,
+         discount_type, discount_flat_kobo, discount_percent, vat_enabled, notes, total_kobo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [businessId, src.clientId, type, documentNumber(DOC_PREFIX[type], seq), seq, src.currency, issue, addDays(issue, days), days,
+        src.discountType, src.discountFlatKobo, src.discountPercent, src.vatEnabled ? 1 : 0, src.notes, src.totalKobo],
+    );
+    id = res.lastInsertRowId;
+    for (const l of lines) {
+      await db.runAsync(
+        'INSERT INTO document_lines (document_id, position, description, quantity, unit_price_kobo) VALUES (?, ?, ?, ?, ?)',
+        [id, l.position, l.description, l.quantity, l.unitPriceKobo],
+      );
+    }
+    await db.runAsync(`UPDATE documents SET status = 'converted', updated_at = datetime('now') WHERE id = ?`, [sourceId]);
   });
   return id;
 }

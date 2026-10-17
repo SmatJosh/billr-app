@@ -34,7 +34,14 @@ Everything is stored on the phone, and the app works without internet. Signing i
 
 Setting up the Supabase project: [docs/supabase-setup.md](docs/supabase-setup.md).
 
-Not yet: phone number sign-in, receipts and deposits, quotes and proforma, Billr Verified, Pro features.
+Not yet: phone number sign-in, receipts and deposits, Billr Verified, Pro features.
+
+## What is in milestone 3
+
+- A bottom bar with Home, Quotes, Clients, Reports and More
+- Quotes with a "valid until" date, the client's answer (accepted or declined), and one tap to turn a quote into a proforma or an invoice with the same client, items, discount, VAT and notes
+- Reports: money in this month or this year, last month or year for comparison, pending and overdue totals, average days to pay, top clients, and a spreadsheet export for an accountant. An invoice counts as money in on the day it is marked paid
+- Home shows paid this month, pending and overdue at a glance
 
 ## Development
 

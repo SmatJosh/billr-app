@@ -37,3 +37,19 @@ test('dates', () => {
   assert.equal(isOverdue('2026-10-14', '2026-10-15'), true);
   assert.equal(isOverdue('2026-10-15', '2026-10-15'), false);
 });
+
+test('short amounts for tiles', async () => {
+  const { formatMoneyShort } = await import('./format.ts');
+  assert.equal(formatMoneyShort(0), '₦0');
+  assert.equal(formatMoneyShort(95_000), '₦950');
+  assert.equal(formatMoneyShort(21_250_000), '₦212.5k');
+  assert.equal(formatMoneyShort(38_500_000), '₦385k');
+  assert.equal(formatMoneyShort(125_000_000), '₦1.25m');
+  assert.equal(formatMoneyShort(50_000, 'USD'), '$500');
+});
+
+test('short days drop this year', async () => {
+  const { formatDayShort } = await import('./dates.ts');
+  assert.equal(formatDayShort('2026-10-31', '2026-10-17'), '31 Oct');
+  assert.equal(formatDayShort('2027-01-05', '2026-10-17'), '5 Jan 2027');
+});

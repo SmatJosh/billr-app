@@ -37,3 +37,15 @@ export function initials(name: string): string {
   if (parts.length === 0) return '?';
   return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
 }
+
+// Short amounts for small tiles: ₦950, ₦212.5k, ₦1.25m.
+export function formatMoneyShort(kobo: number, currency: Currency = 'NGN'): string {
+  const naira = Math.round(Math.abs(kobo) / 100);
+  const sign = kobo < 0 ? '-' : '';
+  const trim = (n: number, places: number) => String(Number(n.toFixed(places)));
+  let body: string;
+  if (naira >= 1_000_000) body = trim(naira / 1_000_000, 2) + 'm';
+  else if (naira >= 1_000) body = trim(naira / 1_000, 1) + 'k';
+  else body = String(naira);
+  return `${sign}${SYMBOL[currency]}${body}`;
+}
