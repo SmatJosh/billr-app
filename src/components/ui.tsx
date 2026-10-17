@@ -1,6 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -312,6 +314,41 @@ export function ScreenTitle({ title, right }: { title: string; right?: ReactNode
       <Text style={[styles.display, { fontSize: 44, lineHeight: 50, flex: 1 }]} accessibilityRole="header">{title}</Text>
       {right}
     </View>
+  );
+}
+
+// A panel that slides up from the bottom over a dimmed screen. Tap outside, the button or Back to close.
+export function BottomSheet({ open, onClose, title, children, doneLabel = 'Got it' }: { open: boolean; onClose: () => void; title: string; children: ReactNode; doneLabel?: string }) {
+  const y = useRef(new Animated.Value(600)).current;
+  useEffect(() => {
+    if (open) {
+      y.setValue(600);
+      Animated.timing(y, { toValue: 0, duration: 260, useNativeDriver: true }).start();
+    }
+  }, [open, y]);
+  return (
+    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <Pressable accessibilityLabel="Close" onPress={onClose} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,18,15,0.45)' }} />
+        <Animated.View
+          style={{ transform: [{ translateY: y }], backgroundColor: color.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xl + 16 }}
+        >
+          <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: color.edge, marginBottom: space.lg }} />
+          <Text style={[styles.display, { fontSize: 30, lineHeight: 36 }]} accessibilityRole="header">{title}</Text>
+          <View style={{ gap: space.md, marginTop: space.md, marginBottom: space.xl }}>{children}</View>
+          <Button label={doneLabel} onPress={onClose} style={{ flex: 0 }} />
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+// The round info button next to a screen title.
+export function InfoButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={8} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? color.hover : 'transparent' })}>
+      <Icon name="info" tint={color.tx2} />
+    </Pressable>
   );
 }
 
