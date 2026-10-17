@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ensureBusiness, listItems } from '../../db/repo';
 import type { Business } from '../../lib/types';
+import { BRAND_COLORS, brandHex, isLogo } from '../../lib/brand';
 import { Card, Divider, ScreenTitle, T } from '../../components/ui';
 import { BackupCard } from '../../components/BackupCard';
 import { Icon, type IconName } from '../../components/icons';
@@ -32,15 +33,24 @@ export default function More() {
     ? `${business.paymentBankName || 'Bank'} ••${business.paymentAccountNumber.slice(-4)}`
     : 'Not added';
 
+  const colourName = BRAND_COLORS.find((c) => c.hex === brandHex(business.brandColor))?.name ?? '';
+  const brandLabel = isLogo(business.logoData) ? `Logo · ${colourName}` : colourName;
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: color.paper }} contentContainerStyle={{ paddingTop: insets.top + space.lg, paddingHorizontal: space.lg, paddingBottom: space.xl }}>
       <ScreenTitle title="More" />
 
       <Pressable accessibilityRole="button" onPress={() => router.push('/setup')} style={{ marginTop: space.lg }}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: space.lg }}>
-          <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: color.ink, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontFamily: font.displayItalic, color: color.onInk, fontSize: 26, lineHeight: 32 }}>{business.name.trim()[0]?.toUpperCase()}</Text>
-          </View>
+          {isLogo(business.logoData) ? (
+            <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: color.muted, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              <Image source={{ uri: business.logoData }} style={{ width: 42, height: 42 }} resizeMode="contain" accessibilityLabel="Your logo" />
+            </View>
+          ) : (
+            <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: brandHex(business.brandColor), alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontFamily: font.displayItalic, color: color.onInk, fontSize: 26, lineHeight: 32 }}>{business.name.trim()[0]?.toUpperCase()}</Text>
+            </View>
+          )}
           <View style={{ flex: 1 }}>
             <T style={{ fontFamily: font.semibold }} numberOfLines={1}>{business.name}</T>
             {business.phone ? <T variant="sub" style={{ fontFamily: font.mono }}>{business.phone}</T> : null}
@@ -54,6 +64,8 @@ export default function More() {
         <MenuRow icon="business" title="Business profile" onPress={() => router.push('/setup')} />
         <Divider />
         <MenuRow icon="bank" title="Payment details" value={bank} onPress={() => router.push('/setup')} />
+        <Divider />
+        <MenuRow icon="brand" title="Your brand" value={brandLabel} onPress={() => router.push('/brand')} />
         <Divider />
         <MenuRow icon="items" title="Items" value={itemCount ? `${itemCount} saved` : undefined} onPress={() => router.push('/items')} />
       </Card>

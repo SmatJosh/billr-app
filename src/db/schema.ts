@@ -97,6 +97,11 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX idx_payments_document ON payments(document_id, paid_on);
   ${syncMigration(['payments'], false)}
   `,
+  // Your brand: logo and colour on invoices, receipts and statements. Backed up with the business.
+  `
+  ALTER TABLE businesses ADD COLUMN logo_data TEXT NOT NULL DEFAULT '';
+  ALTER TABLE businesses ADD COLUMN brand_color TEXT NOT NULL DEFAULT '';
+  `,
 ];
 
 // Milestone 2: backup and sync.

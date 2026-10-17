@@ -28,15 +28,18 @@ export interface Remote {
 }
 
 type Ref = { col: string; table: SyncedTable; required: boolean };
-type Spec = { cols: string[]; bools?: string[]; refs: Ref[] };
+// later: columns added after the first cloud setup. Until their SQL is run in Supabase the cloud does not have them,
+// so the row is uploaded without them (and stays queued) instead of the whole backup failing.
+type Spec = { cols: string[]; bools?: string[]; refs: Ref[]; later?: string[] };
 
 // Column names are the same on the phone and in the cloud. Refs hold local ids on the phone and uids in the cloud.
 const SPECS: Record<SyncedTable, Spec> = {
   businesses: {
     cols: ['name', 'owner_name', 'phone', 'email', 'address', 'tax_id', 'default_currency', 'vat_default', 'payment_bank_name',
-      'payment_account_number', 'payment_account_name', 'default_notes', 'created_at', 'updated_at'],
+      'payment_account_number', 'payment_account_name', 'default_notes', 'created_at', 'updated_at', 'logo_data', 'brand_color'],
     bools: ['vat_default'],
     refs: [],
+    later: ['logo_data', 'brand_color'],
   },
   clients: {
     cols: ['name', 'phone', 'email', 'address', 'notes', 'created_at', 'updated_at'],
@@ -71,6 +74,10 @@ const ADDED_LATER: SyncedTable[] = ['payments'];
 
 export function isMissingTable(e: unknown): boolean {
   return /schema cache|does not exist|PGRST205|42P01/i.test(String((e as Error)?.message ?? e));
+}
+
+export function isMissingColumn(e: unknown): boolean {
+  return /PGRST204|Could not find the '[^']+' column|42703/i.test(String((e as Error)?.message ?? e));
 }
 
 async function tolerant(table: SyncedTable, work: () => Promise<number>): Promise<number> {
@@ -164,15 +171,25 @@ async function pushTable(db: SyncDb, remote: Remote, userId: string, table: Sync
     );
     if (rows.length === 0) break;
     const ready = rows.filter((r) => spec.refs.every((ref) => !ref.required || r[`ref_${ref.col}`]));
+    let partial = false;
     if (ready.length) {
-      await remote.upsert(table, ready.map((r) => toRemote(spec, r, userId)));
-      for (const r of ready) {
-        await db.runAsync(`UPDATE ${table} SET synced_rev = ? WHERE id = ?`, [r.rev, r.id]);
+      try {
+        await remote.upsert(table, ready.map((r) => toRemote(spec, r, userId, false)));
+      } catch (e) {
+        if (!spec.later || !isMissingColumn(e)) throw e;
+        await remote.upsert(table, ready.map((r) => toRemote(spec, r, userId, true)));
+        partial = true;
+      }
+      // Uploaded without the newer columns: keep the rows queued so those go up once the cloud has them.
+      if (!partial) {
+        for (const r of ready) {
+          await db.runAsync(`UPDATE ${table} SET synced_rev = ? WHERE id = ?`, [r.rev, r.id]);
+        }
       }
       count += ready.length;
     }
     // A row whose parent is gone cannot be uploaded; stop rather than loop on it.
-    if (ready.length < rows.length || rows.length < PUSH_BATCH) break;
+    if (partial || ready.length < rows.length || rows.length < PUSH_BATCH) break;
   }
   const gone = await db.getAllAsync<{ uid: string }>('SELECT uid FROM sync_tombstones WHERE tbl = ?', [table]);
   if (gone.length) {
@@ -184,9 +201,9 @@ async function pushTable(db: SyncDb, remote: Remote, userId: string, table: Sync
   return count;
 }
 
-function toRemote(spec: Spec, r: Record<string, any>, userId: string): Record<string, unknown> {
+function toRemote(spec: Spec, r: Record<string, any>, userId: string, withoutLater: boolean): Record<string, unknown> {
   const out: Record<string, unknown> = { id: r.uid, user_id: userId, deleted: false };
-  for (const c of spec.cols) out[c] = spec.bools?.includes(c) ? !!r[c] : r[c];
+  for (const c of spec.cols) if (!(withoutLater && spec.later?.includes(c))) out[c] = spec.bools?.includes(c) ? !!r[c] : r[c];
   for (const ref of spec.refs) out[ref.col] = r[`ref_${ref.col}`] ?? null;
   return out;
 }
@@ -238,6 +255,8 @@ async function applyRow(db: SyncDb, table: SyncedTable, row: RemoteRow): Promise
 
   const values: Record<string, Param> = {};
   for (const c of spec.cols) {
+    // A cloud without a newer column has nothing to say about it; the phone keeps its own value.
+    if (spec.later?.includes(c) && !(c in row)) continue;
     const v = row[c];
     values[c] = spec.bools?.includes(c) ? (v ? 1 : 0) : ((v ?? null) as Param);
   }

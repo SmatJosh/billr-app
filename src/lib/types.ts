@@ -15,6 +15,9 @@ export type Business = {
   paymentAccountNumber: string;
   paymentAccountName: string;
   defaultNotes: string;
+  // Your brand: a small logo as a data URI, and a colour from BRAND_COLORS ('' = charcoal).
+  logoData: string;
+  brandColor: string;
 };
 
 export type Client = {

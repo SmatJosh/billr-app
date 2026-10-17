@@ -220,3 +220,34 @@ test('until the payments table exists in the cloud, backup of everything else st
   assert.equal(remote.live('documents').length, 1);
   assert.equal(await countPending(db), 1, 'the payment waits on the phone for the cloud table');
 });
+
+test('logo and colour back up; before their cloud columns exist, the rest of the business still does', async () => {
+  const remote = new FakeRemote();
+  const realUpsert = remote.upsert.bind(remote);
+  let cloudHasBrand = false;
+  remote.upsert = async (table, rows) => {
+    if (table === 'businesses' && !cloudHasBrand && rows.some((r) => 'logo_data' in r)) {
+      throw new Error("Could not find the 'brand_color' column of 'businesses' in the schema cache");
+    }
+    return realUpsert(table, rows);
+  };
+  const { db } = await phoneWithInvoice();
+  await updateBusiness(db as any, 1, { logoData: 'data:image/png;base64,AAAA', brandColor: '#1F3A68' });
+  await sync(db, remote, USER);
+  assert.equal(remote.live('documents').length, 1, 'invoices still back up');
+  assert.equal(remote.live('businesses')[0].name, 'Ada Couture');
+  assert.equal(await countPending(db), 1, 'the business waits so its logo goes up later');
+
+  // Pulling from a cloud without the columns leaves the phone's logo alone.
+  await sync(db, remote, USER);
+  assert.equal((await ensureBusiness(db as any)).logoData, 'data:image/png;base64,AAAA');
+
+  // The owner runs the SQL: the next sync sends the logo, and a new phone restores it.
+  cloudHasBrand = true;
+  await sync(db, remote, USER);
+  assert.equal(await countPending(db), 0);
+  const fresh = await phone();
+  await sync(fresh, remote, USER);
+  const restored = await ensureBusiness(fresh as any);
+  assert.deepEqual([restored.logoData, restored.brandColor], ['data:image/png;base64,AAAA', '#1F3A68']);
+});
