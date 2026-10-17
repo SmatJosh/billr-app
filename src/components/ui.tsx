@@ -112,7 +112,8 @@ export function Avatar({ text }: { text: string }) {
 
 type FieldProps = TextInputProps & { label: string; help?: string; mono?: boolean; error?: string | null };
 
-export function Field({ label, help, mono, error, style, multiline, ...rest }: FieldProps) {
+export function Field({ label, help, mono, error, style, multiline, onFocus, onBlur, ...rest }: FieldProps) {
+  const [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: 6 }}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -120,11 +121,20 @@ export function Field({ label, help, mono, error, style, multiline, ...rest }: F
         placeholderTextColor={color.tx3}
         aria-label={label}
         multiline={multiline}
+        onFocus={(e) => {
+          setFocused(true);
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          onBlur?.(e);
+        }}
         {...rest}
         style={[
           styles.input,
           mono && { fontFamily: font.mono },
           multiline && { height: undefined, minHeight: 96, paddingTop: 12, textAlignVertical: 'top' },
+          focused ? { borderColor: color.ink, backgroundColor: color.surface } : null,
           error ? { borderColor: color.dueTx } : null,
           style,
         ]}
@@ -140,7 +150,7 @@ export function Chip({ label, on, onPress }: { label: string; on?: boolean; onPr
       accessibilityRole="button"
       accessibilityState={{ selected: !!on }}
       onPress={onPress}
-      style={[styles.chip, on && { backgroundColor: color.ink, borderColor: color.ink }]}
+      style={[styles.chip, on && { backgroundColor: color.ink }]}
     >
       <Text style={{ fontFamily: on ? font.semibold : font.medium, fontSize: 14, color: on ? color.onInk : color.tx }}>{label}</Text>
     </Pressable>
@@ -218,7 +228,7 @@ export function WhatsAppButton({ onPress, busy, label = 'Send on WhatsApp' }: { 
 // A small figure card: coloured dot, label, amount in the display font. Used on Home and Reports.
 export function StatTile({ label, value, dot, danger }: { label: string; value: string; dot?: string; danger?: boolean }) {
   return (
-    <View style={[styles.card, { flex: 1, padding: space.md, borderColor: danger ? color.dueBg : color.line }]}>
+    <View style={[styles.card, { flex: 1, padding: space.md }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
         {dot ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot }} /> : null}
         <Text style={[styles.label, { flexShrink: 1 }]} numberOfLines={1}>{label}</Text>
@@ -361,7 +371,7 @@ export function SheetScreen({ title, children }: { title: string; children: Reac
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: space.lg, paddingRight: space.sm }}>
           <Text style={[styles.display, { fontSize: 30, lineHeight: 36, flex: 1 }]} accessibilityRole="header">{title}</Text>
           {/* Not everyone knows to tap outside or press Back, so closing is also a visible button. */}
-          <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? color.hover : color.surface, borderWidth: 1, borderColor: color.edge })}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? color.edge : color.muted })}>
             <Icon name="close" size={20} tint={color.tx} />
           </Pressable>
         </View>
@@ -409,9 +419,10 @@ export const styles = StyleSheet.create({
   mono: { fontFamily: font.mono, fontSize: 15, color: color.tx },
   display: { fontFamily: font.display, fontSize: 40, color: color.tx, letterSpacing: -0.3 },
   section: { fontFamily: font.semibold, fontSize: 13, color: color.tx2, marginTop: 18, marginBottom: 8, marginHorizontal: 4 },
-  card: { backgroundColor: color.surface, borderWidth: 1, borderColor: color.line, borderRadius: radius.card, overflow: 'hidden' },
+  // Cards, inputs and chips are told apart by fill, not outlines: white cards on paper, beige-filled inputs.
+  card: { backgroundColor: color.surface, borderRadius: radius.card, overflow: 'hidden' },
   btn: { minHeight: 52, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, flex: 1 },
-  btn2: { backgroundColor: color.surface, borderWidth: 1, borderColor: color.edge },
+  btn2: { backgroundColor: color.muted },
   btnText: { fontFamily: font.semibold, fontSize: 16 },
   linkBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
   linkText: { fontFamily: font.semibold, fontSize: 14, color: color.accent },
@@ -422,17 +433,17 @@ export const styles = StyleSheet.create({
   fieldLabel: { fontFamily: font.medium, fontSize: 13, color: color.tx2 },
   input: {
     height: 52,
-    borderWidth: 1,
-    borderColor: color.edge,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
     borderRadius: radius.input,
-    backgroundColor: color.surface,
+    backgroundColor: color.muted,
     paddingHorizontal: 14,
     fontFamily: font.regular,
     fontSize: 16,
     color: color.tx,
   },
   help: { fontFamily: font.regular, fontSize: 13, color: color.tx3 },
-  chip: { height: 40, paddingHorizontal: 16, borderRadius: radius.pill, borderWidth: 1, borderColor: color.edge, backgroundColor: color.surface, justifyContent: 'center' },
-  seg: { flexDirection: 'row', borderWidth: 1, borderColor: color.edge, borderRadius: radius.pill, overflow: 'hidden', backgroundColor: color.surface },
-  segBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  chip: { height: 40, paddingHorizontal: 16, borderRadius: radius.pill, backgroundColor: color.surface, justifyContent: 'center' },
+  seg: { flexDirection: 'row', borderRadius: radius.pill, overflow: 'hidden', backgroundColor: color.muted, padding: 3 },
+  segBtn: { flex: 1, height: 40, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
 });
