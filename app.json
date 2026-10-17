@@ -33,6 +33,10 @@
     "scheme": "billr",
     "experiments": {
       "typedRoutes": false
+    },
+    "extra": {
+      "supabaseUrl": "https://zqlcqgihclasslfipkxh.supabase.co",
+      "supabaseKey": "sb_publishable_GB6Re6n1vbf9lADFAYGRBg_8dRW_bvK"
     }
   }
 }
