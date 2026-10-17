@@ -102,7 +102,7 @@ export default function SignIn() {
               textContentType="oneTimeCode"
               autoFocus
               mono
-              placeholder="123456"
+              placeholder="Code from the email"
               returnKeyType="done"
               onSubmitEditing={verify}
               error={error}

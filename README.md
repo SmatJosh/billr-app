@@ -27,7 +27,7 @@ Everything is stored on the phone, and the app works without internet. Signing i
 
 ## What is in milestone 2
 
-- Sign in with an emailed 6-digit code (from the Business screen, or "Restore your invoices" on a new phone)
+- Sign in with an emailed code (from the Business screen, or "Restore your invoices" on a new phone)
 - Automatic backup of the business, clients, items and invoices to Supabase, and restore on a new phone
 - Changes made on one phone appear on another signed-in phone. If both changed the same thing, the change not yet backed up wins
 - Works offline: changes wait on the phone and upload when the internet is back

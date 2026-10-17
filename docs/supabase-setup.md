@@ -19,7 +19,7 @@ These tables have row-level security switched on. Each signed-in person can only
 
 ## 3. Make the sign-in email send a code
 
-Billr signs people in with a 6-digit code sent by email, which they type into the app. Supabase's default email sends a link instead, and its templates can only be edited once you connect your own email service (SMTP). That service is also what lets people outside your Supabase team get codes. Brevo is free (300 emails a day) and needs no domain:
+Billr signs people in with a code sent by email (6 to 8 digits, set by "Email OTP Length" under Authentication > Sign In / Providers > Email), which they type into the app. Supabase's default email sends a link instead, and its templates can only be edited once you connect your own email service (SMTP). That service is also what lets people outside your Supabase team get codes. Brevo is free (300 emails a day) and needs no domain:
 
 1. Sign up at [brevo.com](https://www.brevo.com). Under **Senders, Domains & Dedicated IPs > Senders**, add your email address and confirm it with the code Brevo sends.
 2. Under **SMTP & API > SMTP**, click **Generate a new SMTP key**. Keep the page open.
