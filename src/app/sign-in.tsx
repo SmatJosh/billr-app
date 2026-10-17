@@ -9,6 +9,7 @@ function friendly(e: unknown): string {
   const msg = String((e as Error)?.message ?? e);
   if (/expired|invalid/i.test(msg)) return 'That code is wrong or has expired. Use the newest email, or send a new code.';
   if (/rate limit|too many|seconds/i.test(msg)) return 'Too many codes sent. Wait a few minutes, then try again.';
+  if (/error sending/i.test(msg)) return 'We couldn’t send the code email just now. Try again in a few minutes.';
   if (/network|fetch/i.test(msg)) return 'No internet connection. Connect and try again.';
   return msg;
 }
