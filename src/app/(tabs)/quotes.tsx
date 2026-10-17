@@ -7,9 +7,9 @@ import { createDocument, ensureBusiness, listDocuments, type DocListRow } from '
 import type { Business } from '../../lib/types';
 import { formatMoney } from '../../lib/format';
 import { quoteSummary } from '../../lib/reports';
-import { Card, Chip, ChipRow, Empty, Fab, ScreenTitle, T } from '../../components/ui';
+import { BottomSheet, Card, Chip, ChipRow, Empty, Fab, InfoButton, ScreenTitle, T } from '../../components/ui';
 import { DocRow } from '../../components/DocRow';
-import { color, space } from '../../theme';
+import { color, font, space } from '../../theme';
 
 type Filter = 'all' | 'quote' | 'proforma' | 'accepted' | 'converted';
 
@@ -20,6 +20,7 @@ export default function Quotes() {
   const [docs, setDocs] = useState<DocListRow[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
   const [creating, setCreating] = useState(false);
+  const [help, setHelp] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -65,7 +66,7 @@ export default function Quotes() {
         contentContainerStyle={{ paddingTop: insets.top + space.lg, paddingHorizontal: space.lg, paddingBottom: 96 }}
         ListHeaderComponent={
           <View>
-            <ScreenTitle title="Quotes" />
+            <ScreenTitle title="Quotes" right={<InfoButton label="What are quotes?" onPress={() => setHelp(true)} />} />
             <Card style={{ padding: space.lg, marginTop: space.md, flexDirection: 'row', gap: space.md }}>
               <View style={{ flex: 1 }}>
                 <T variant="label">AWAITING REPLY</T>
@@ -101,6 +102,20 @@ export default function Quotes() {
         renderItem={({ item }) => <DocRow d={item} />}
       />
       <Fab label="New quote" onPress={newQuote} busy={creating} />
+      <BottomSheet open={help} onClose={() => setHelp(false)} title="Quotes and proformas">
+        <HelpItem title="Quote">A price you send before the job starts. When the client says yes, tap Accepted and turn it into an invoice in one tap.</HelpItem>
+        <HelpItem title="Proforma">A bill you send before you deliver, so the client can approve and pay. Many companies ask for one before they release money.</HelpItem>
+        <HelpItem title="Invoice">The final bill. It lives on Home, where you mark it paid.</HelpItem>
+      </BottomSheet>
+    </View>
+  );
+}
+
+function HelpItem({ title, children }: { title: string; children: string }) {
+  return (
+    <View>
+      <T style={{ fontFamily: font.semibold }}>{title}</T>
+      <T variant="sub" style={{ fontSize: 15, lineHeight: 22 }}>{children}</T>
     </View>
   );
 }

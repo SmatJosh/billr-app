@@ -1,6 +1,8 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,6 +17,7 @@ import {
 } from 'react-native';
 import { color, font, radius, space, TOUCH } from '../theme';
 import type { DocStatus, DocType } from '../lib/types';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Icon } from './icons';
 import { today } from '../lib/dates';
 
@@ -144,17 +147,48 @@ export function Chip({ label, on, onPress }: { label: string; on?: boolean; onPr
 }
 
 // Filter chips in one line that scrolls sideways past the screen edge, instead of wrapping onto a second line.
+// A fade at the cut edge shows there is more to swipe to; it goes away once the end is in view.
 export function ChipRow({ children, label }: { children: ReactNode; label?: string }) {
+  const [boxW, setBoxW] = useState(0);
+  const [contentW, setContentW] = useState(0);
+  const [x, setX] = useState(0);
+  const moreRight = contentW - boxW - x > 4;
+  const moreLeft = x > 4;
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      accessibilityLabel={label}
-      style={{ marginHorizontal: -space.lg, flexGrow: 0 }}
-      contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.lg }}
-    >
-      {children}
-    </ScrollView>
+    <View style={{ marginHorizontal: -space.lg }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        accessibilityLabel={label}
+        style={{ flexGrow: 0 }}
+        contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.lg }}
+        onLayout={(e) => setBoxW(e.nativeEvent.layout.width)}
+        onContentSizeChange={(w) => setContentW(w)}
+        onScroll={(e) => setX(e.nativeEvent.contentOffset.x)}
+        scrollEventThrottle={32}
+      >
+        {children}
+      </ScrollView>
+      {moreLeft ? <EdgeFade side="left" /> : null}
+      {moreRight ? <EdgeFade side="right" /> : null}
+    </View>
+  );
+}
+
+function EdgeFade({ side }: { side: 'left' | 'right' }) {
+  const id = `fade-${side}`;
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, width: 48, [side]: 0 }}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id={id} x1={side === 'right' ? '0' : '1'} y1="0" x2={side === 'right' ? '1' : '0'} y2="0">
+            <Stop offset="0" stopColor={color.paper} stopOpacity={0} />
+            <Stop offset="1" stopColor={color.paper} stopOpacity={1} />
+          </LinearGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill={`url(#${id})`} />
+      </Svg>
+    </View>
   );
 }
 
@@ -283,6 +317,41 @@ export function ScreenTitle({ title, right }: { title: string; right?: ReactNode
   );
 }
 
+// A panel that slides up from the bottom over a dimmed screen. Tap outside, the button or Back to close.
+export function BottomSheet({ open, onClose, title, children, doneLabel = 'Got it' }: { open: boolean; onClose: () => void; title: string; children: ReactNode; doneLabel?: string }) {
+  const y = useRef(new Animated.Value(600)).current;
+  useEffect(() => {
+    if (open) {
+      y.setValue(600);
+      Animated.timing(y, { toValue: 0, duration: 260, useNativeDriver: true }).start();
+    }
+  }, [open, y]);
+  return (
+    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <Pressable accessibilityLabel="Close" onPress={onClose} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,18,15,0.45)' }} />
+        <Animated.View
+          style={{ transform: [{ translateY: y }], backgroundColor: color.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xl + 16 }}
+        >
+          <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: color.edge, marginBottom: space.lg }} />
+          <Text style={[styles.display, { fontSize: 30, lineHeight: 36 }]} accessibilityRole="header">{title}</Text>
+          <View style={{ gap: space.md, marginTop: space.md, marginBottom: space.xl }}>{children}</View>
+          <Button label={doneLabel} onPress={onClose} style={{ flex: 0 }} />
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+// The round info button next to a screen title.
+export function InfoButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={8} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? color.hover : 'transparent' })}>
+      <Icon name="info" tint={color.tx2} />
+    </Pressable>
+  );
+}
+
 export function SaveState({ state }: { state: 'idle' | 'saving' | 'saved' | 'error' }) {
   if (state === 'idle') return null;
   const label = state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : 'Not saved. Tap to retry';
@@ -335,7 +404,7 @@ export const styles = StyleSheet.create({
     color: color.tx,
   },
   help: { fontFamily: font.regular, fontSize: 13, color: color.tx3 },
-  chip: { height: 40, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: color.edge, backgroundColor: color.surface, justifyContent: 'center' },
+  chip: { height: 40, paddingHorizontal: 16, borderRadius: radius.pill, borderWidth: 1, borderColor: color.edge, backgroundColor: color.surface, justifyContent: 'center' },
   seg: { flexDirection: 'row', borderWidth: 1, borderColor: color.edge, borderRadius: radius.pill, overflow: 'hidden', backgroundColor: color.surface },
   segBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
 });
